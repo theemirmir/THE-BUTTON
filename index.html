@@ -4862,12 +4862,45 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if (document.visibilityState === "hidden") saveActiveRun();
   });
 
-  const pendingRun = readActiveRun();
-  if (pendingRun) {
-    resumeActiveRun(pendingRun);
-  } else {
+  function bootFromSaveOrTitle() {
     document.body.classList.remove("is-resuming");
+    const pendingRun = readActiveRun();
+    if (!pendingRun) {
+      document.body.classList.remove("is-playing", "is-entering");
+      document.body.classList.add("is-title");
+      if (titleScreen) titleScreen.classList.remove("is-gone");
+      return;
+    }
+    // Wait a frame so shop/game panes have real sizes (avoids 0x0 black canvas)
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        try {
+          resize();
+          resumeActiveRun(pendingRun);
+          resize();
+          renderer.render(scene, camera);
+        } catch (err) {
+          clearActiveRun();
+          document.body.classList.remove(
+            "is-playing",
+            "is-entering",
+            "is-resuming",
+            "has-shop"
+          );
+          document.body.classList.add("is-title");
+          if (titleScreen) titleScreen.classList.remove("is-gone");
+          if (shopPanel) shopPanel.hidden = true;
+          if (splitHandle) splitHandle.hidden = true;
+          inGame = false;
+          if (enterHint) {
+            enterHint.textContent = "SAVE CORRUPT · START A NEW FACTORY";
+          }
+        }
+      });
+    });
   }
+
+  bootFromSaveOrTitle();
 })();
 
   </script>
@@ -4878,6 +4911,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (hint) hint.textContent = "FAILED TO LOAD 3D ENGINE";
         document.body.classList.remove("is-resuming", "is-playing", "is-entering");
         document.body.classList.add("is-title");
+        var title = document.getElementById("title-screen");
+        if (title) title.classList.remove("is-gone");
       }
     })();
   </script>
