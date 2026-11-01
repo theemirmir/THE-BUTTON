@@ -1401,8 +1401,22 @@ body.is-title {
 body.is-title .title-action-btn,
 body.is-title .servers-close,
 body.is-title .server-join,
-body.is-title .server-delete {
+body.is-title .server-delete,
+body.is-title .leaderboard-btn,
+body.is-title .mute-btn,
+body.is-title .name-input,
+body.is-title .name-gate .title-action-btn {
   cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
+
+.title-center,
+.leaderboard-btn,
+.mute-btn,
+.name-gate-inner {
+  pointer-events: auto;
 }
 
 @keyframes title-rise {

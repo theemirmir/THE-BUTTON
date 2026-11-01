@@ -1802,9 +1802,22 @@
   );
   scene.add(motes);
 
+  // Invisible larger hit target so the button is easy to click
+  const buttonHit = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.7, 0.7, 0.45, 24),
+    new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    })
+  );
+  buttonHit.position.y = 1.22;
+  buttonHit.name = "THE_BUTTON";
+  buttonGroup.add(buttonHit);
+
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  const interactables = [buttonMesh, buttonTop];
+  const interactables = [buttonHit, buttonMesh, buttonTop];
 
   function resize() {
     const w = gamePane.clientWidth || window.innerWidth;
@@ -1842,6 +1855,9 @@
     pressing = down;
     buttonMesh.position.y = down ? 1.08 : 1.18;
     buttonTop.position.y = down ? 1.222 : 1.322;
+    if (typeof buttonHit !== "undefined" && buttonHit) {
+      buttonHit.position.y = down ? 1.12 : 1.22;
+    }
     buttonGlow.intensity = down ? 7.5 : 5.2 * buttonAppear;
     buttonFill.intensity = down ? 2.8 : 1.6 * buttonAppear;
     if (withSound && audio()) {
