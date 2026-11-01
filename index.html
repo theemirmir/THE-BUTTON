@@ -1570,9 +1570,261 @@ body.is-title .name-gate .title-action-btn {
   </style>
 </head>
 <body class="is-title">
+  <div id="viewport">
+    <div id="stage" class="stage">
+      <div id="game-pane" class="game-pane">
+        <canvas id="scene"></canvas>
+        <div class="scanlines" aria-hidden="true"></div>
+        <div class="vignette" aria-hidden="true"></div>
+        <div class="grain" aria-hidden="true"></div>
 
+        <aside class="hud-stats" id="hud-stats" hidden>
+          <div class="stat">
+            <span class="stat-label">COINS</span>
+            <span class="stat-value" id="coin-count">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">BEST PULSES</span>
+            <span class="stat-value" id="best-count">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">PULSES</span>
+            <span class="stat-value" id="pulse-count">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">AUTO</span>
+            <span class="stat-value" id="auto-count">0/s</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">DEATH ODDS</span>
+            <span class="stat-value stat-value--odds" id="odds-display">10%</span>
+          </div>
+        </aside>
 
-  <!-- Three.js r160 UMD — inlined so GitHub Pages needs no CDN -->
+        <p class="prompt" id="prompt" hidden>90% COIN · 10% DEATH</p>
+        <div class="coin-flash" id="coin-flash" aria-hidden="true"></div>
+      </div>
+
+      <div
+        id="split-handle"
+        class="split-handle"
+        hidden
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize panels"
+        tabindex="0"
+      ></div>
+
+      <aside id="shop-panel" class="shop-panel" hidden>
+        <header class="shop-header">
+          <p class="shop-kicker">FACTORY UPLINK</p>
+          <h2 class="shop-title">DIGITAL MENU</h2>
+          <p class="shop-sub">Drag the seam to resize either pane.</p>
+        </header>
+
+        <div class="shop-odds">
+          <span class="shop-odds-label">CURRENT DEATH CHANCE</span>
+          <span class="shop-odds-value" id="shop-death-odds">10%</span>
+          <span class="shop-odds-coin" id="shop-coin-odds">COIN CHANCE 90%</span>
+        </div>
+
+        <div class="buy-qty" id="buy-qty" role="tablist" aria-label="Purchase amount">
+          <button type="button" class="buy-qty-btn is-active" data-qty="1">1</button>
+          <button type="button" class="buy-qty-btn" data-qty="10">10</button>
+          <button type="button" class="buy-qty-btn" data-qty="100">100</button>
+          <button type="button" class="buy-qty-btn" data-qty="1000">1000</button>
+        </div>
+        <p class="buy-qty-note">Bulk price = cost of buying that many one-by-one.</p>
+
+        <div class="shop-item">
+          <p class="shop-item-name">HIGHER ODDS</p>
+          <p class="shop-item-desc">
+            Each buy makes survival stronger (death chance ÷ 2,
+            scaled by Effectiveness). First buy: <strong>5 coins</strong>
+            → 5% death. Cost doubles every purchase.
+          </p>
+          <p class="shop-item-preview" id="shop-upgrade-preview">
+            NEXT · 10% → 5% DEATH · COST 5
+          </p>
+          <button type="button" class="shop-buy" id="shop-buy-btn">
+            PURCHASE UPGRADE
+          </button>
+        </div>
+
+        <div class="shop-item">
+          <p class="shop-item-name">BUTTON STRENGTH</p>
+          <p class="shop-item-desc">
+            Each buy grants <strong>+2 extra coins</strong> per click
+            (scaled by Effectiveness). First buy: <strong>25 coins</strong>.
+            Cost doubles every purchase.
+          </p>
+          <p class="shop-item-preview" id="shop-strength-preview">
+            NEXT · +1 → +3 / CLICK · COST 25
+          </p>
+          <button type="button" class="shop-buy" id="shop-strength-btn">
+            PURCHASE STRENGTH
+          </button>
+        </div>
+
+        <div class="shop-item">
+          <p class="shop-item-name">AUTO CLICKER</p>
+          <p class="shop-item-desc">
+            Clicks the button for you.
+            First buy: <strong>50 coins</strong> → <strong>1 click/sec</strong>.
+            Each further buy costs <strong>2×</strong> and adds <strong>+1 click/sec</strong>
+            (scaled by Effectiveness).
+          </p>
+          <p class="shop-item-preview" id="shop-auto-preview">
+            NEXT · 0 → 1 / SEC · COST 50
+          </p>
+          <button type="button" class="shop-buy" id="shop-auto-btn">
+            PURCHASE AUTO
+          </button>
+        </div>
+
+        <div class="shop-item">
+          <p class="shop-item-name">EFFECTIVENESS</p>
+          <p class="shop-item-desc">
+            Makes <strong>future</strong> Odds, Strength, and Auto 1.5× stronger.
+            Does <strong>not</strong> affect Ascend, does not change what you
+            already own, and does not buff itself.
+            First buy: <strong>500 coins</strong>. Cost doubles every purchase.
+          </p>
+          <p class="shop-item-preview" id="shop-effectiveness-preview">
+            NEXT · ×1 → ×1.5 FUTURE POWER · COST 500
+          </p>
+          <button type="button" class="shop-buy" id="shop-effectiveness-btn">
+            PURCHASE EFFECTIVENESS
+          </button>
+        </div>
+
+        <div class="shop-item shop-item--ascend">
+          <p class="shop-item-name">ASCEND</p>
+          <p class="shop-item-desc">
+            A hook takes you. You die.
+            Permanently raise base coins per click by <strong>+1</strong>.
+            Never affected by Effectiveness.
+            First cost: <strong>200 coins</strong>. Cost doubles each ascend.
+            Always buys <strong>x1</strong>.
+          </p>
+          <p class="shop-item-preview" id="shop-ascend-preview">
+            NEXT · BASE 1 → 2 / CLICK · COST 200
+          </p>
+          <button type="button" class="shop-buy shop-buy--ascend" id="shop-ascend-btn">
+            ASCEND
+          </button>
+          <p class="shop-buy-msg" id="shop-buy-msg"></p>
+        </div>
+
+        <p class="shop-foot">ALWAYS ONLINE · SCORE = PULSES · ASCEND IS PERMANENT</p>
+      </aside>
+    </div>
+
+    <div id="title-screen" class="title-screen" tabindex="0" aria-label="Main menu">
+      <button type="button" class="leaderboard-btn" id="leaderboard-btn">LEADERBOARD</button>
+
+      <div class="title-center" id="title-enter">
+        <p class="brand brand--hero">THE BUTTON</p>
+        <p class="tagline">You are not here. You never were.</p>
+        <p class="player-line" id="player-line">OPERATOR · ???</p>
+        <div class="high-record">
+          <span class="high-record-label">HIGHEST PULSE RECORD</span>
+          <span class="high-record-value" id="high-score">0</span>
+        </div>
+        <p class="odds-line">EACH PRESS · STARTS 90% COIN · 10% DEATH</p>
+        <p class="ascend-line" id="ascend-line">ASCENSION LEVEL 0 · BASE 1 COIN / CLICK</p>
+        <p class="fair-line" id="fair-line">LIFETIME ROLLS · 0 COIN / 0 DEATH</p>
+        <div class="title-actions">
+          <button type="button" class="title-action-btn" id="continue-game-btn" hidden>
+            CONTINUE FACTORY
+          </button>
+          <button type="button" class="title-action-btn" id="enter-game-btn">NEW FACTORY</button>
+          <button type="button" class="title-action-btn title-action-btn--servers" id="servers-btn">
+            SERVERS
+          </button>
+          <button type="button" class="title-action-btn title-action-btn--ghost" id="change-name-btn">
+            RENAME ACCOUNT
+          </button>
+        </div>
+        <p class="enter-hint" id="enter-hint">A NAME IS REQUIRED TO PLAY</p>
+        <p class="audio-hint">AUDIO UNLOCKS ON ENTER</p>
+      </div>
+
+      <div class="servers-panel" id="servers-panel" hidden>
+        <div class="servers-panel-inner">
+          <header class="servers-header">
+            <h2 class="servers-title">SERVERS</h2>
+            <button type="button" class="servers-close" id="servers-close">CLOSE</button>
+          </header>
+          <p class="servers-sub">Runs saved when you leave via MAIN MENU.</p>
+          <div class="servers-list" id="servers-list"></div>
+          <p class="servers-empty" id="servers-empty">NO SAVED SERVERS</p>
+        </div>
+      </div>
+
+      <div class="leaderboard-panel" id="leaderboard-panel" hidden>
+        <div class="servers-panel-inner">
+          <header class="servers-header">
+            <h2 class="servers-title">LEADERBOARD</h2>
+            <button type="button" class="servers-close" id="leaderboard-close">CLOSE</button>
+          </header>
+          <p class="servers-sub" id="leaderboard-sub">BOARD SPLITS BY BUILD · GITHUB vs LOCAL</p>
+          <div class="leaderboard-list" id="leaderboard-list"></div>
+          <p class="servers-empty" id="leaderboard-empty">NO SCORES YET · PLAY ON THIS DEVICE, THEN CHECK AGAIN</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="name-gate" id="name-gate" hidden>
+      <div class="name-gate-inner">
+        <p class="name-gate-kicker">YOUR ACCOUNT ON THIS BROWSER</p>
+        <h2 class="name-gate-title">OPERATOR NAME</h2>
+        <p class="name-gate-sub">Renaming keeps the same account. A second player needs another browser or device.</p>
+        <input
+          type="text"
+          id="name-input"
+          class="name-input"
+          maxlength="16"
+          placeholder="OPERATOR NAME"
+          autocomplete="username"
+        />
+        <button type="button" class="title-action-btn" id="name-confirm-btn">CONFIRM</button>
+        <p class="name-gate-error" id="name-gate-error"></p>
+      </div>
+    </div>
+
+    <button type="button" class="mute-btn" id="mute-btn" aria-label="Toggle sound" title="Toggle sound">
+      SOUND ON
+    </button>
+
+    <button type="button" class="main-menu-btn" id="main-menu-btn" hidden>
+      MAIN MENU
+    </button>
+
+    <button type="button" class="new-run-btn" id="new-run-btn" hidden>
+      NEW RUN
+    </button>
+
+    <div class="death-overlay" id="death-overlay" hidden>
+      <div class="death-inner">
+        <p class="death-code" id="death-code">ERR_SIGNAL_LOST</p>
+        <h1 class="death-title" id="death-title">YOU DIED</h1>
+        <p class="death-sub" id="death-sub">The factory kept running without you.</p>
+        <p class="death-run">THIS RUN · <span id="death-pulses">0</span> PULSES · <span id="death-coins">0</span> COINS</p>
+        <button type="button" class="retry-btn" id="retry-btn">RETURN TO SIGNAL</button>
+      </div>
+    </div>
+
+    <div class="hook-overlay" id="hook-overlay" hidden aria-hidden="true">
+      <div class="hook-chain"></div>
+      <div class="hook-head"></div>
+      <p class="hook-text">ASCENDING</p>
+    </div>
+
+    <div class="enter-wipe" id="enter-wipe" aria-hidden="true"></div>
+  </div>
+
+    <!-- Three.js r160 UMD â€” inlined so GitHub Pages needs no CDN -->
   <script>
 console.warn('Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation'),
 /**
@@ -2360,6 +2612,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   const serversEmpty = document.getElementById("servers-empty");
   const serversClose = document.getElementById("servers-close");
   const enterGameBtn = document.getElementById("enter-game-btn");
+  const continueGameBtn = document.getElementById("continue-game-btn");
   const mainMenuBtn = document.getElementById("main-menu-btn");
   const leaderboardBtn = document.getElementById("leaderboard-btn");
   const leaderboardPanel = document.getElementById("leaderboard-panel");
@@ -4503,6 +4756,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     closeServersPanel();
     if (enterHint) enterHint.textContent = "SAVED RUNS APPEAR UNDER SERVERS";
     if (audio()) audio().returnTitle();
+    syncContinueBtn();
   }
 
   function goToMainMenu() {
@@ -4862,16 +5116,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if (document.visibilityState === "hidden") saveActiveRun();
   });
 
-  function bootFromSaveOrTitle() {
-    document.body.classList.remove("is-resuming");
+  function syncContinueBtn() {
+    if (!continueGameBtn) return;
+    const pending = readActiveRun();
+    continueGameBtn.hidden = !pending;
+  }
+
+  function continueSavedFactory() {
+    if (!ensureNamedOrGate()) return;
     const pendingRun = readActiveRun();
     if (!pendingRun) {
-      document.body.classList.remove("is-playing", "is-entering");
-      document.body.classList.add("is-title");
-      if (titleScreen) titleScreen.classList.remove("is-gone");
+      syncContinueBtn();
       return;
     }
-    // Wait a frame so shop/game panes have real sizes (avoids 0x0 black canvas)
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         try {
@@ -4881,6 +5138,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           renderer.render(scene, camera);
         } catch (err) {
           clearActiveRun();
+          syncContinueBtn();
           document.body.classList.remove(
             "is-playing",
             "is-entering",
@@ -4900,7 +5158,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     });
   }
 
-  bootFromSaveOrTitle();
+  // Always show the title on load — never auto-jump into a black 3D resume.
+  document.body.classList.remove("is-resuming", "is-playing", "is-entering");
+  document.body.classList.add("is-title");
+  if (titleScreen) titleScreen.classList.remove("is-gone");
+  syncContinueBtn();
+
+  if (continueGameBtn) {
+    continueGameBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      continueSavedFactory();
+    });
+  }
 })();
 
   </script>
