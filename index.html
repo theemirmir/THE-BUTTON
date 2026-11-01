@@ -2807,7 +2807,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     try {
       localStorage.setItem(
         LB_CACHE_KEY,
-        JSON.stringify(sortLeaderboard(list).slice(0, 100))
+        JSON.stringify(
+          sortLeaderboard(dedupeLeaderboardEntries(list)).slice(0, 100)
+        )
       );
     } catch (err) {
       /* ignore */
@@ -2817,7 +2819,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   function loadLeaderboardCache() {
     try {
       const list = JSON.parse(localStorage.getItem(LB_CACHE_KEY) || "[]");
-      return Array.isArray(list) ? list : [];
+      return Array.isArray(list) ? dedupeLeaderboardEntries(list) : [];
     } catch (err) {
       return [];
     }
@@ -2850,6 +2852,34 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     return chain;
   }
 
+  function entryBelongsToThisBoard(id) {
+    // GitHub Pages board: only gh_…
+    // Local board: loc_… plus legacy unprefixed op… (never gh_)
+    if (LB_CHANNEL === "gh") return id.indexOf("gh_") === 0;
+    if (id.indexOf("gh_") === 0) return false;
+    return id.indexOf("loc_") === 0 || /^op[a-z0-9]+$/i.test(id);
+  }
+
+  function dedupeLeaderboardEntries(list) {
+    const map = {};
+    (list || []).forEach(function (entry) {
+      if (!entry || !entry.id) return;
+      const key = String(entry.id).toLowerCase();
+      const prev = map[key];
+      if (
+        !prev ||
+        (entry.pulses | 0) > (prev.pulses | 0) ||
+        ((entry.pulses | 0) === (prev.pulses | 0) &&
+          String(entry.date || "") > String(prev.date || ""))
+      ) {
+        map[key] = entry;
+      }
+    });
+    return Object.keys(map).map(function (k) {
+      return map[k];
+    });
+  }
+
   function parseDreamloEntries(data) {
     try {
       if (typeof data === "string") {
@@ -2859,14 +2889,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (!board || !board.entry) return [];
       const raw = board.entry;
       const arr = Array.isArray(raw) ? raw : [raw];
-      return arr
+      const parsed = arr
         .map(function (row) {
           const id = String(row.name || "").trim();
-          if (!id) return null;
-          // Only this build's channel (gh_… vs loc_…)
-          if (id.indexOf(LB_PREFIX) !== 0) return null;
+          if (!id || !entryBelongsToThisBoard(id)) return null;
           const fromText = normalizeName(row.text);
-          const bare = id.slice(LB_PREFIX.length);
+          const bare = id.replace(/^(gh_|loc_)/, "");
           const label =
             fromText ||
             (/^op[a-z0-9]+$/i.test(bare) ? "OPERATOR" : normalizeName(bare)) ||
@@ -2879,6 +2907,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           };
         })
         .filter(Boolean);
+      // Dreamlo sometimes returns duplicate rows for the same account
+      return dedupeLeaderboardEntries(parsed);
     } catch (err) {
       return [];
     }
@@ -2969,7 +2999,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   function renderLeaderboard(list, statusText) {
     if (!leaderboardList) return;
-    const rows = sortLeaderboard(list);
+    const rows = sortLeaderboard(dedupeLeaderboardEntries(list));
     const myId = getLeaderboardAccountId();
     leaderboardList.innerHTML = "";
     if (leaderboardEmpty) leaderboardEmpty.hidden = rows.length > 0;
