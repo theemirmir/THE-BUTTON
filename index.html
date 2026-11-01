@@ -7,9 +7,1570 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <style>
+:root {
+  --void: #040605;
+  --pit: #0a1210;
+  --acid: #7dffb0;
+  --acid-dim: #3d8a5c;
+  --blood: #ff1a1a;
+  --blood-glow: #ff4a3a;
+  --steel: #9aaba4;
+  --warn: #d4ffb0;
+  --panel: rgba(6, 14, 11, 0.92);
+  --line: rgba(125, 255, 176, 0.22);
+  --font-display: "Chakra Petch", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --shop-width: 34%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--void);
+  color: var(--warn);
+  font-family: var(--font-mono);
+  cursor: crosshair;
+}
+
+#viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 45%, #102018 0%, transparent 55%),
+    radial-gradient(ellipse 120% 80% at 50% 100%, #06100c 0%, var(--void) 70%),
+    linear-gradient(180deg, #070b09 0%, #040605 100%);
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  z-index: 1;
+}
+
+.game-pane {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 28%;
+  height: 100%;
+  overflow: hidden;
+  transition: width 0.45s ease;
+}
+
+body.has-shop .game-pane {
+  width: auto;
+  flex: 1 1 auto;
+  transition: none;
+}
+
+body.has-shop.is-shop-opening .game-pane {
+  transition: width 0.45s ease;
+}
+
+#scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 1.1s ease;
+}
+
+body.is-playing #scene,
+body.is-entering #scene,
+body.is-resuming #scene {
+  opacity: 1;
+}
+
+body.is-resuming .title-screen {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.split-handle {
+  flex: 0 0 10px;
+  width: 10px;
+  margin: 0 -5px;
+  z-index: 12;
+  cursor: col-resize;
+  position: relative;
+  background: transparent;
+  touch-action: none;
+}
+
+.split-handle::before {
+  content: "";
+  position: absolute;
+  top: 10%;
+  bottom: 10%;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--acid-dim),
+    var(--acid),
+    var(--acid-dim),
+    transparent
+  );
+  box-shadow: 0 0 12px rgba(111, 255, 154, 0.45);
+  opacity: 0.85;
+}
+
+.split-handle:hover::before,
+.split-handle:focus-visible::before {
+  width: 3px;
+  opacity: 1;
+  outline: none;
+}
+
+.split-handle[hidden] {
+  display: none;
+}
+
+.shop-panel {
+  position: relative;
+  flex: 0 0 var(--shop-width);
+  width: var(--shop-width);
+  min-width: 18%;
+  max-width: 72%;
+  height: 100%;
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: clamp(1rem, 2.5vw, 1.6rem);
+  overflow: auto;
+  color: var(--acid);
+  background:
+    linear-gradient(165deg, rgba(10, 22, 16, 0.98) 0%, rgba(3, 7, 5, 0.99) 55%, rgba(6, 12, 9, 0.98) 100%),
+    radial-gradient(ellipse 80% 40% at 100% 0%, rgba(125, 255, 176, 0.06), transparent 50%);
+  border-left: 1px solid var(--line);
+  box-shadow:
+    inset 10px 0 32px rgba(0, 0, 0, 0.45),
+    -12px 0 40px rgba(0, 0, 0, 0.35);
+  animation: shop-in 0.5s ease both;
+  scrollbar-width: thin;
+  scrollbar-color: var(--acid-dim) transparent;
+}
+
+.shop-panel[hidden] {
+  display: none;
+}
+
+.shop-header {
+  border-bottom: 1px solid rgba(42, 107, 69, 0.55);
+  padding-bottom: 0.85rem;
+}
+
+.shop-kicker {
+  font-size: 0.65rem;
+  letter-spacing: 0.28em;
+  color: var(--acid-dim);
+}
+
+.shop-title {
+  margin-top: 0.35rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2.4vw, 1.55rem);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-shadow: 0 0 16px rgba(111, 255, 154, 0.35);
+}
+
+.shop-sub {
+  margin-top: 0.45rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--acid-dim);
+  line-height: 1.4;
+}
+
+.shop-odds {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid rgba(42, 107, 69, 0.4);
+}
+
+.buy-qty {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+}
+
+.buy-qty-btn {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  padding: 0.55rem 0.2rem;
+  color: var(--acid-dim);
+  background: transparent;
+  border: 1px solid rgba(42, 107, 69, 0.55);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.buy-qty-btn:hover,
+.buy-qty-btn:focus-visible {
+  color: var(--acid);
+  border-color: var(--acid);
+  outline: none;
+}
+
+.buy-qty-btn.is-active {
+  color: var(--void);
+  background: var(--acid);
+  border-color: var(--acid);
+}
+
+.buy-qty-note {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: var(--acid-dim);
+  line-height: 1.4;
+}
+
+.shop-odds-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.22em;
+  color: var(--acid-dim);
+}
+
+.shop-odds-value {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 700;
+  color: var(--blood-glow);
+  text-shadow: 0 0 18px rgba(255, 40, 40, 0.45);
+}
+
+.shop-odds-coin {
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  color: var(--acid);
+}
+
+.shop-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid rgba(61, 138, 92, 0.28);
+  background:
+    linear-gradient(135deg, rgba(125, 255, 176, 0.04), transparent 40%),
+    rgba(0, 0, 0, 0.28);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.shop-item:hover {
+  border-color: rgba(125, 255, 176, 0.45);
+  background:
+    linear-gradient(135deg, rgba(125, 255, 176, 0.07), transparent 45%),
+    rgba(0, 0, 0, 0.35);
+}
+
+.shop-item-name {
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+
+.shop-item-desc {
+  display: none;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  letter-spacing: 0.04em;
+  color: #8fb89a;
+}
+
+.shop-item:has(.shop-buy:hover) .shop-item-desc,
+.shop-item:has(.shop-buy:focus-visible) .shop-item-desc,
+.shop-item:hover .shop-item-desc,
+.shop-item:focus-within .shop-item-desc {
+  display: block;
+}
+
+.shop-item-desc strong {
+  color: var(--acid);
+  font-weight: 700;
+}
+
+.shop-item-preview {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--warn);
+  line-height: 1.45;
+}
+
+.shop-buy {
+  align-self: stretch;
+  margin-top: 0.2rem;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  padding: 0.8rem 1rem;
+  color: var(--void);
+  background: linear-gradient(180deg, #9dffc2 0%, var(--acid) 100%);
+  border: 1px solid #b8ffd4;
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.15s, filter 0.2s;
+}
+
+.shop-buy:hover,
+.shop-buy:focus-visible {
+  box-shadow: 0 0 24px rgba(125, 255, 176, 0.4);
+  filter: brightness(1.05);
+  outline: none;
+}
+
+.shop-buy:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.shop-buy:disabled {
+  cursor: not-allowed;
+  color: #6a7a70;
+  background: #1a2820;
+  border-color: #2a3a30;
+  box-shadow: none;
+}
+
+.shop-buy-msg {
+  min-height: 1.1em;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--blood-glow);
+}
+
+.shop-buy-msg.is-ok {
+  color: var(--acid);
+}
+
+.shop-foot {
+  margin-top: auto;
+  padding-top: 1rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  color: var(--acid-dim);
+}
+
+@keyframes shop-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 720px) {
+  body.has-shop .stage {
+    flex-direction: column;
+  }
+
+  body.has-shop .game-pane {
+    width: 100% !important;
+    height: calc(100% - var(--shop-width));
+    min-width: 0;
+    min-height: 28%;
+  }
+
+  body.has-shop .shop-panel {
+    width: 100% !important;
+    height: var(--shop-width);
+    max-width: none;
+    border-left: none;
+    border-top: 1px solid rgba(111, 255, 154, 0.28);
+  }
+
+  .split-handle {
+    flex-basis: 10px;
+    width: 100%;
+    height: 10px;
+    margin: -5px 0;
+    cursor: row-resize;
+  }
+
+  .split-handle::before {
+    top: 50%;
+    bottom: auto;
+    left: 10%;
+    right: 10%;
+    width: auto;
+    height: 2px;
+    transform: translateY(-50%);
+  }
+}
+
+body.is-playing .vignette {
+  background:
+    radial-gradient(ellipse at center, transparent 48%, rgba(0, 0, 0, 0.55) 100%),
+    linear-gradient(180deg, rgba(0, 20, 12, 0.2) 0%, transparent 22%, transparent 72%, rgba(0, 0, 0, 0.4) 100%);
+}
+
+body.is-playing .scanlines {
+  opacity: 0.35;
+}
+
+.scanlines {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.18) 2px,
+    rgba(0, 0, 0, 0.18) 4px
+  );
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+  animation: scan-drift 8s linear infinite;
+}
+
+.vignette {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background:
+    radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.72) 100%),
+    linear-gradient(180deg, rgba(0, 20, 12, 0.35) 0%, transparent 25%, transparent 70%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+.grain {
+  pointer-events: none;
+  position: absolute;
+  inset: -20%;
+  z-index: 5;
+  opacity: 0.08;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain-shift 0.4s steps(2) infinite;
+}
+
+/* ——— Title / starting screen ——— */
+.title-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 42%, rgba(20, 48, 34, 0.5) 0%, transparent 60%),
+    radial-gradient(ellipse 100% 80% at 50% 100%, rgba(8, 20, 14, 0.65), transparent 55%),
+    linear-gradient(180deg, rgba(4, 8, 6, 0.2), rgba(2, 4, 3, 0.55));
+  transition: opacity 0.85s ease, visibility 0.85s ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.title-screen.is-gone {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.title-center {
+  text-align: center;
+  padding: 1.5rem;
+  max-width: min(96vw, 56rem);
+  animation: title-rise 1.4s ease-out both;
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-weight: 900;
+  letter-spacing: 0.28em;
+  color: var(--acid);
+  text-shadow:
+    0 0 18px rgba(111, 255, 154, 0.45),
+    0 0 40px rgba(40, 120, 70, 0.35);
+  animation: brand-flicker 5s ease-in-out infinite;
+}
+
+.brand--hero {
+  font-size: clamp(2.6rem, 11vw, 7rem);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1.05;
+  text-shadow:
+    0 0 24px rgba(125, 255, 176, 0.5),
+    0 0 60px rgba(40, 120, 70, 0.4),
+    0 0 100px rgba(20, 80, 50, 0.28);
+}
+
+.tagline {
+  margin-top: clamp(0.9rem, 2.5vw, 1.4rem);
+  font-size: clamp(0.75rem, 2vw, 1.05rem);
+  letter-spacing: 0.2em;
+  color: var(--acid-dim);
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.high-record {
+  margin-top: clamp(2rem, 5vw, 3.25rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.high-record-label {
+  font-size: clamp(0.65rem, 1.5vw, 0.8rem);
+  letter-spacing: 0.28em;
+  color: var(--acid-dim);
+}
+
+.high-record-value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  color: var(--acid);
+  text-shadow: 0 0 20px rgba(111, 255, 154, 0.5);
+  min-width: 2ch;
+}
+
+.odds-line {
+  margin-top: clamp(1.1rem, 3vw, 1.6rem);
+  font-family: var(--font-display);
+  font-size: clamp(0.65rem, 1.5vw, 0.8rem);
+  letter-spacing: 0.22em;
+  color: var(--acid);
+  text-shadow: 0 0 12px rgba(111, 255, 154, 0.35);
+}
+
+.ascend-line {
+  margin-top: 0.85rem;
+  font-family: var(--font-display);
+  font-size: clamp(0.65rem, 1.4vw, 0.8rem);
+  letter-spacing: 0.18em;
+  color: #c4a574;
+  text-shadow: 0 0 12px rgba(196, 165, 116, 0.35);
+}
+
+.fair-line {
+  margin-top: 0.55rem;
+  font-size: clamp(0.6rem, 1.3vw, 0.75rem);
+  letter-spacing: 0.14em;
+  color: var(--acid-dim);
+}
+
+.shop-item--ascend {
+  border-color: rgba(196, 165, 116, 0.4);
+  background:
+    linear-gradient(135deg, rgba(196, 165, 116, 0.08), transparent 42%),
+    rgba(0, 0, 0, 0.3);
+  margin-top: 0.35rem;
+}
+
+.shop-buy--ascend {
+  background: linear-gradient(180deg, #d4b888 0%, #c4a574 100%);
+  border-color: #e0c598;
+  color: #1a1208;
+}
+
+.shop-buy--ascend:hover,
+.shop-buy--ascend:focus-visible {
+  box-shadow: 0 0 22px rgba(196, 165, 116, 0.45);
+  filter: brightness(1.05);
+}
+
+.shop-buy--ascend:disabled {
+  color: #6a7a70;
+  background: #1a2820;
+  border-color: #2a3a30;
+  box-shadow: none;
+}
+
+.hook-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 50% -10%,
+    rgba(40, 20, 10, 0.2),
+    rgba(0, 0, 0, 0.72) 55%,
+    #000 100%
+  );
+}
+
+.hook-overlay[hidden] {
+  display: none;
+}
+
+.hook-overlay.is-active {
+  display: block;
+  animation: hook-flash 0.35s ease-out both;
+}
+
+.hook-chain {
+  position: absolute;
+  left: 50%;
+  top: -40%;
+  width: 10px;
+  height: 70%;
+  transform: translateX(-50%);
+  background: repeating-linear-gradient(
+    180deg,
+    #6a5840 0 14px,
+    #3a3020 14px 18px
+  );
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.8);
+  animation: hook-drop 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.hook-head {
+  position: absolute;
+  left: 50%;
+  top: 28%;
+  width: 72px;
+  height: 72px;
+  transform: translate(-50%, -50%);
+  border: 8px solid #8a7350;
+  border-top-color: transparent;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 4px #2a2010,
+    0 0 24px rgba(0, 0, 0, 0.7);
+  animation: hook-drop 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.hook-head::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  width: 14px;
+  height: 28px;
+  transform: translateX(-50%);
+  background: #8a7350;
+  border-radius: 0 0 6px 6px;
+}
+
+.hook-text {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 4vw, 1.6rem);
+  letter-spacing: 0.35em;
+  color: #c4a574;
+  text-shadow: 0 0 20px rgba(196, 165, 116, 0.55);
+  animation: hook-text-in 0.6s ease 0.7s both;
+}
+
+body.is-hooked #game-pane {
+  animation: hook-yank 1.35s cubic-bezier(0.55, 0.05, 0.9, 0.4) 1.05s both;
+}
+
+body.is-hooked #shop-panel {
+  animation: hook-fade-side 0.8s ease 1.1s both;
+}
+
+@keyframes hook-drop {
+  from {
+    transform: translate(-50%, -120%);
+  }
+  to {
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes hook-yank {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    filter: none;
+  }
+  35% {
+    transform: translateY(8px) rotate(-1deg);
+  }
+  100% {
+    transform: translateY(-140vh) rotate(18deg) scale(0.7);
+    filter: brightness(0.2) blur(2px);
+  }
+}
+
+@keyframes hook-fade-side {
+  to {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+}
+
+@keyframes hook-text-in {
+  from {
+    opacity: 0;
+    letter-spacing: 0.6em;
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.35em;
+  }
+}
+
+@keyframes hook-flash {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.enter-hint {
+  margin-top: clamp(2.2rem, 6vw, 3.5rem);
+  font-family: var(--font-display);
+  font-size: clamp(0.65rem, 1.6vw, 0.85rem);
+  letter-spacing: 0.32em;
+  color: var(--blood-glow);
+  text-shadow: 0 0 14px rgba(255, 40, 40, 0.45);
+  animation: pulse-prompt 2.4s ease-in-out infinite;
+}
+
+.audio-hint {
+  margin-top: 0.75rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  color: var(--acid-dim);
+  opacity: 0.75;
+}
+
+.mute-btn {
+  position: absolute;
+  left: clamp(0.85rem, 2.5vw, 1.4rem);
+  bottom: clamp(0.85rem, 2.5vw, 1.4rem);
+  z-index: 35;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  padding: 0.55rem 0.75rem;
+  color: var(--acid-dim);
+  background: rgba(4, 10, 8, 0.65);
+  border: 1px solid rgba(42, 107, 69, 0.55);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.mute-btn:hover,
+.mute-btn:focus-visible {
+  color: var(--acid);
+  border-color: var(--acid);
+  box-shadow: 0 0 14px rgba(111, 255, 154, 0.25);
+  outline: none;
+}
+
+.mute-btn.is-muted {
+  color: #7a5555;
+  border-color: rgba(120, 60, 60, 0.55);
+}
+
+.title-actions {
+  margin-top: clamp(1.5rem, 4vw, 2.25rem);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: center;
+}
+
+.title-action-btn {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  padding: 0.85rem 1.25rem;
+  color: var(--void);
+  background: linear-gradient(180deg, #9dffc2 0%, var(--acid) 100%);
+  border: 1px solid #b8ffd4;
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.15s, filter 0.2s;
+}
+
+.title-action-btn:hover,
+.title-action-btn:focus-visible {
+  box-shadow: 0 0 24px rgba(125, 255, 176, 0.4);
+  filter: brightness(1.05);
+  outline: none;
+}
+
+.title-action-btn--servers {
+  color: var(--acid);
+  background: transparent;
+  border-color: var(--acid-dim);
+}
+
+.title-action-btn--servers:hover,
+.title-action-btn--servers:focus-visible {
+  color: var(--void);
+  background: var(--acid);
+}
+
+.servers-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(2, 4, 3, 0.82);
+}
+
+.servers-panel[hidden] {
+  display: none;
+}
+
+.servers-panel-inner {
+  width: min(92vw, 28rem);
+  max-height: min(80vh, 32rem);
+  overflow: auto;
+  padding: 1.25rem;
+  border: 1px solid rgba(111, 255, 154, 0.28);
+  background:
+    linear-gradient(180deg, rgba(8, 18, 14, 0.98), rgba(3, 6, 5, 0.98));
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.55);
+}
+
+.servers-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.servers-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.22em;
+  color: var(--acid);
+}
+
+.servers-close {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  padding: 0.45rem 0.7rem;
+  color: var(--acid-dim);
+  background: transparent;
+  border: 1px solid rgba(42, 107, 69, 0.55);
+  cursor: pointer;
+}
+
+.servers-close:hover {
+  color: var(--acid);
+  border-color: var(--acid);
+}
+
+.servers-sub {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--acid-dim);
+  margin-bottom: 1rem;
+}
+
+.servers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.server-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid rgba(42, 107, 69, 0.45);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.server-name {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--acid);
+  text-align: left;
+}
+
+.server-meta {
+  display: block;
+  margin-top: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: var(--acid-dim);
+}
+
+.server-join,
+.server-delete {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  padding: 0.45rem 0.55rem;
+  cursor: pointer;
+  border: 1px solid var(--acid-dim);
+  background: transparent;
+  color: var(--acid);
+}
+
+.server-join:hover {
+  background: var(--acid);
+  color: var(--void);
+}
+
+.server-delete {
+  color: #c07070;
+  border-color: rgba(120, 60, 60, 0.55);
+}
+
+.server-delete:hover {
+  background: rgba(120, 40, 40, 0.35);
+}
+
+.servers-empty {
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  color: var(--acid-dim);
+  text-align: center;
+  padding: 1.5rem 0;
+}
+
+.servers-empty[hidden] {
+  display: none;
+}
+
+.leaderboard-btn {
+  position: absolute;
+  left: clamp(0.85rem, 2.5vw, 1.4rem);
+  top: clamp(0.85rem, 2.5vw, 1.4rem);
+  z-index: 26;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  padding: 0.55rem 0.75rem;
+  color: #c4a574;
+  background: rgba(4, 10, 8, 0.65);
+  border: 1px solid rgba(196, 165, 116, 0.45);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.leaderboard-btn:hover,
+.leaderboard-btn:focus-visible {
+  color: #1a1208;
+  background: #c4a574;
+  box-shadow: 0 0 14px rgba(196, 165, 116, 0.35);
+  outline: none;
+}
+
+.player-line {
+  margin: 0.85rem 0 0.25rem;
+  font-family: var(--font-display);
+  font-size: clamp(0.7rem, 1.6vw, 0.85rem);
+  letter-spacing: 0.2em;
+  color: var(--acid);
+  text-shadow: 0 0 12px rgba(111, 255, 154, 0.35);
+}
+
+.title-action-btn--ghost {
+  color: var(--acid-dim);
+  background: transparent;
+  border-color: rgba(42, 107, 69, 0.45);
+}
+
+.title-action-btn--ghost:hover,
+.title-action-btn--ghost:focus-visible {
+  color: var(--acid);
+  background: transparent;
+  border-color: var(--acid);
+  box-shadow: none;
+}
+
+.leaderboard-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(2, 4, 3, 0.82);
+}
+
+.leaderboard-panel[hidden] {
+  display: none;
+}
+
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.lb-row {
+  display: grid;
+  grid-template-columns: 2.2rem 1fr auto;
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(42, 107, 69, 0.45);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.lb-row.is-you {
+  border-color: rgba(196, 165, 116, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(196, 165, 116, 0.15);
+}
+
+.lb-rank {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  color: var(--acid-dim);
+}
+
+.lb-meta {
+  min-width: 0;
+  text-align: left;
+}
+
+.lb-name {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--acid);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-date {
+  margin-top: 0.15rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  color: var(--acid-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-score {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: #c4a574;
+}
+
+.name-gate {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at center, rgba(16, 36, 26, 0.55), rgba(0, 0, 0, 0.92));
+}
+
+.name-gate[hidden] {
+  display: none;
+}
+
+.name-gate-inner {
+  width: min(92vw, 24rem);
+  text-align: center;
+  padding: 1.5rem 1.25rem;
+  border: 1px solid rgba(111, 255, 154, 0.28);
+  background: rgba(4, 8, 6, 0.95);
+}
+
+.name-gate-kicker {
+  font-size: 0.65rem;
+  letter-spacing: 0.28em;
+  color: var(--acid-dim);
+}
+
+.name-gate-title {
+  margin-top: 0.45rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.2rem, 4vw, 1.7rem);
+  letter-spacing: 0.16em;
+  color: var(--acid);
+}
+
+.name-gate-sub {
+  margin: 0.65rem 0 1.2rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--acid-dim);
+}
+
+.name-input {
+  width: 100%;
+  margin-bottom: 0.9rem;
+  padding: 0.85rem 0.9rem;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  letter-spacing: 0.14em;
+  text-align: center;
+  color: var(--acid);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(42, 107, 69, 0.65);
+  outline: none;
+}
+
+.name-input:focus {
+  border-color: var(--acid);
+  box-shadow: 0 0 16px rgba(111, 255, 154, 0.2);
+}
+
+.name-gate-error {
+  margin-top: 0.75rem;
+  min-height: 1.1em;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--blood-glow);
+}
+
+.main-menu-btn {
+  position: absolute;
+  left: clamp(0.85rem, 2.5vw, 1.4rem);
+  top: clamp(0.85rem, 2.5vw, 1.4rem);
+  z-index: 35;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  padding: 0.55rem 0.75rem;
+  color: var(--acid);
+  background: rgba(4, 10, 8, 0.65);
+  border: 1px solid rgba(42, 107, 69, 0.55);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.main-menu-btn:hover,
+.main-menu-btn:focus-visible {
+  color: var(--void);
+  background: var(--acid);
+  box-shadow: 0 0 14px rgba(111, 255, 154, 0.25);
+  outline: none;
+}
+
+.main-menu-btn[hidden] {
+  display: none;
+}
+
+.new-run-btn {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(0.85rem, 2.5vw, 1.4rem);
+  transform: translateX(-50%);
+  z-index: 35;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  padding: 0.65rem 1.25rem;
+  color: var(--blood-glow);
+  background: rgba(20, 4, 4, 0.75);
+  border: 1px solid rgba(255, 40, 40, 0.45);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.new-run-btn:hover,
+.new-run-btn:focus-visible {
+  color: #fff;
+  border-color: var(--blood);
+  background: rgba(80, 10, 10, 0.85);
+  box-shadow: 0 0 18px rgba(255, 40, 40, 0.35);
+  outline: none;
+}
+
+.new-run-btn[hidden] {
+  display: none;
+}
+
+.stat-value--odds {
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+}
+
+.enter-wipe {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 50% 55%, rgba(111, 255, 154, 0.18), transparent 50%),
+    #020403;
+}
+
+.enter-wipe.active {
+  animation: wipe-in 1.15s ease-in-out both;
+}
+
+.hud-stats {
+  position: absolute;
+  top: clamp(1rem, 3.5vw, 2rem);
+  right: clamp(0.85rem, 2.8vw, 1.75rem);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.85rem 1rem;
+  pointer-events: none;
+  animation: fade-in 1.2s ease 0.35s both;
+  background: linear-gradient(160deg, rgba(8, 18, 13, 0.72), rgba(3, 6, 5, 0.55));
+  border: 1px solid rgba(125, 255, 176, 0.18);
+  backdrop-filter: blur(6px);
+}
+
+.hud-stats[hidden],
+.prompt[hidden] {
+  display: none;
+}
+
+.stat {
+  text-align: right;
+  min-width: 7.5rem;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.58rem;
+  letter-spacing: 0.2em;
+  color: var(--acid-dim);
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--acid);
+  text-shadow: 0 0 12px rgba(125, 255, 176, 0.35);
+}
+
+.prompt {
+  position: absolute;
+  bottom: clamp(4.2rem, 9vw, 5.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  font-family: var(--font-display);
+  font-size: clamp(0.68rem, 1.7vw, 0.9rem);
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  color: var(--blood-glow);
+  text-shadow: 0 0 16px rgba(255, 40, 40, 0.55);
+  pointer-events: none;
+  animation: pulse-prompt 2.4s ease-in-out infinite;
+  white-space: nowrap;
+  padding: 0.55rem 1rem;
+  background: rgba(20, 0, 0, 0.35);
+  border: 1px solid rgba(255, 60, 50, 0.25);
+}
+
+.death-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at center, rgba(80, 0, 0, 0.55), rgba(0, 0, 0, 0.94)),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(255, 0, 0, 0.03) 3px,
+      rgba(255, 0, 0, 0.03) 6px
+    );
+  animation: death-in 0.55s ease-out both;
+}
+
+.death-overlay[hidden] {
+  display: none;
+}
+
+.death-inner {
+  text-align: center;
+  padding: 1.5rem;
+  animation: death-glitch 0.8s steps(2) both;
+}
+
+.death-code {
+  font-size: 0.75rem;
+  letter-spacing: 0.3em;
+  color: #ff6b6b;
+  margin-bottom: 0.75rem;
+  opacity: 0.7;
+}
+
+.death-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2.5rem, 10vw, 5.5rem);
+  letter-spacing: 0.2em;
+  color: var(--blood);
+  text-shadow:
+    2px 0 #00ff88,
+    -2px 0 #ff0033,
+    0 0 40px rgba(255, 0, 0, 0.7);
+}
+
+.death-sub {
+  margin-top: 1rem;
+  letter-spacing: 0.12em;
+  color: #9a6a6a;
+  font-size: 0.9rem;
+}
+
+.death-run {
+  margin-top: 0.85rem;
+  font-family: var(--font-display);
+  letter-spacing: 0.18em;
+  font-size: 0.8rem;
+  color: var(--acid-dim);
+}
+
+.retry-btn {
+  margin-top: 2rem;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  letter-spacing: 0.25em;
+  padding: 0.85rem 1.6rem;
+  color: var(--acid);
+  background: transparent;
+  border: 1px solid var(--acid-dim);
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+}
+
+.retry-btn:hover,
+.retry-btn:focus-visible {
+  color: var(--void);
+  background: var(--acid);
+  box-shadow: 0 0 24px rgba(111, 255, 154, 0.45);
+  outline: none;
+}
+
+.coin-flash {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 55%, rgba(255, 210, 80, 0.35), transparent 55%);
+}
+
+.coin-flash.active {
+  animation: coin-burst 0.7s ease-out;
+}
+
+body.is-dead {
+  cursor: default;
+}
+
+body.is-dead #scene {
+  filter: grayscale(0.85) contrast(1.2) brightness(0.35);
+}
+
+body.is-title {
+  cursor: default;
+}
+
+body.is-title .title-action-btn,
+body.is-title .servers-close,
+body.is-title .server-join,
+body.is-title .server-delete,
+body.is-title .leaderboard-btn,
+body.is-title .mute-btn,
+body.is-title .name-input,
+body.is-title .name-gate .title-action-btn {
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
+
+.title-center,
+.leaderboard-btn,
+.mute-btn,
+.name-gate-inner {
+  pointer-events: auto;
+}
+
+@keyframes title-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes brand-flicker {
+  0%,
+  92%,
+  100% {
+    opacity: 1;
+  }
+  93% {
+    opacity: 0.55;
+  }
+  94% {
+    opacity: 1;
+  }
+  96% {
+    opacity: 0.7;
+  }
+  97% {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-prompt {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes scan-drift {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(4px);
+  }
+}
+
+@keyframes grain-shift {
+  0% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-1.5%, 1%);
+  }
+  100% {
+    transform: translate(1%, -0.5%);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes death-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes death-glitch {
+  0% {
+    transform: translate(-4px, 2px) skewX(-2deg);
+    filter: hue-rotate(40deg);
+  }
+  40% {
+    transform: translate(3px, -2px);
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes coin-burst {
+  0% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes wipe-in {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .hud-stats {
+    top: auto;
+    bottom: clamp(4.5rem, 12vw, 6rem);
+    right: 1rem;
+  }
+
+  .brand--hero {
+    letter-spacing: 0.12em;
+  }
+
+  .tagline {
+    letter-spacing: 0.08em;
+    max-width: 18rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .enter-hint {
+    letter-spacing: 0.14em;
+  }
+}
+
+  </style>
 </head>
 <body class="is-title">
+
   <script>
     (function () {
       try {
@@ -273,54 +1834,3275 @@
     <div class="enter-wipe" id="enter-wipe" aria-hidden="true"></div>
   </div>
 
-  <script src="audio.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
+  <script>
+(function () {
+  "use strict";
+
+  let ctx = null;
+  let master = null;
+  let ambientGain = null;
+  let musicGain = null;
+  let sfxGain = null;
+  let muted = false;
+  let started = false;
+  let titleNodes = [];
+  let factoryNodes = [];
+  let padNodes = [];
+  let ambienceMode = "off"; // off | title | factory
+  let flickerTimer = null;
+  let melodyTimer = null;
+  let chordTimer = null;
+  let breathTimer = null;
+  let musicFxReady = false;
+
+  // Cold / hollow eerie palette (A Phrygian-ish + tritones)
+  const ROOT = 55;
+  const PAD_CHORDSETS = [
+    [ROOT, ROOT * 1.189, ROOT * 1.498], // dark minor-ish
+    [ROOT * 0.944, ROOT * 1.122, ROOT * 1.682], // uneasy cluster
+    [ROOT, ROOT * 1.414, ROOT * 1.888], // tritone color
+    [ROOT * 1.059, ROOT * 1.335, ROOT * 1.782], // sinking
+  ];
+  const MELODY = [
+    220, 233.08, 261.63, 277.18, 311.13, 329.63, 349.23, 369.99, 415.3,
+  ];
+
+  function ensure() {
+    if (ctx) return ctx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    ctx = new AC();
+    master = ctx.createGain();
+    master.gain.value = muted ? 0 : 0.9;
+    master.connect(ctx.destination);
+
+    ambientGain = ctx.createGain();
+    ambientGain.gain.value = 0.7;
+    ambientGain.connect(master);
+
+    musicGain = ctx.createGain();
+    musicGain.gain.value = 0.0;
+
+    sfxGain = ctx.createGain();
+    sfxGain.gain.value = 0.85;
+    sfxGain.connect(master);
+    return ctx;
+  }
+
+  function ensureMusicFx() {
+    if (musicFxReady || !ctx || !musicGain || !ambientGain) return;
+    // Soft echo chamber for cavernous feel (kept alive across scenes)
+    const delay = ctx.createDelay(1.5);
+    delay.delayTime.value = 0.48;
+    const delayFeedback = ctx.createGain();
+    delayFeedback.gain.value = 0.42;
+    const delayFilter = ctx.createBiquadFilter();
+    delayFilter.type = "lowpass";
+    delayFilter.frequency.value = 1400;
+    const wet = ctx.createGain();
+    wet.gain.value = 0.5;
+    const dry = ctx.createGain();
+    dry.gain.value = 0.72;
+
+    musicGain.connect(dry);
+    dry.connect(ambientGain);
+    musicGain.connect(delay);
+    delay.connect(delayFilter);
+    delayFilter.connect(wet);
+    wet.connect(ambientGain);
+    delayFilter.connect(delayFeedback);
+    delayFeedback.connect(delay);
+    musicFxReady = true;
+  }
+
+  function resume() {
+    const c = ensure();
+    if (!c) return null;
+    if (c.state === "suspended") c.resume();
+    started = true;
+    return c;
+  }
+
+  function now() {
+    return ctx ? ctx.currentTime : 0;
+  }
+
+  function noiseBuffer(seconds) {
+    const rate = ctx.sampleRate;
+    const len = Math.floor(rate * seconds);
+    const buffer = ctx.createBuffer(1, len, rate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    return buffer;
+  }
+
+  function envGain(peak, attack, hold, release, dest) {
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    g.connect(dest || sfxGain);
+    const t = now();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(peak, t + attack);
+    g.gain.setValueAtTime(peak, t + attack + hold);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + hold + release);
+    return g;
+  }
+
+  function tone(freq, type, peak, attack, hold, release, detune) {
+    if (!resume()) return;
+    const osc = ctx.createOscillator();
+    osc.type = type || "sine";
+    osc.frequency.value = freq;
+    if (detune) osc.detune.value = detune;
+    const g = envGain(peak, attack, hold, release);
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = Math.max(400, freq * 4);
+    osc.connect(filter);
+    filter.connect(g);
+    osc.start();
+    osc.stop(now() + attack + hold + release + 0.05);
+  }
+
+  function stopNodes(list) {
+    list.forEach(function (node) {
+      try {
+        if (node.frequency && node.stop) node.stop();
+        else if (node.stop) node.stop();
+        if (node.disconnect) node.disconnect();
+      } catch (err) {
+        /* already stopped */
+      }
+    });
+    list.length = 0;
+  }
+
+  function clearTimers() {
+    if (flickerTimer) {
+      clearInterval(flickerTimer);
+      flickerTimer = null;
+    }
+    if (melodyTimer) {
+      clearTimeout(melodyTimer);
+      melodyTimer = null;
+    }
+    if (chordTimer) {
+      clearTimeout(chordTimer);
+      chordTimer = null;
+    }
+    if (breathTimer) {
+      clearInterval(breathTimer);
+      breathTimer = null;
+    }
+  }
+
+  function fadeMusicIn(level, seconds) {
+    if (!musicGain) return;
+    const t = now();
+    musicGain.gain.cancelScheduledValues(t);
+    musicGain.gain.setValueAtTime(Math.max(0.0001, musicGain.gain.value), t);
+    musicGain.gain.linearRampToValueAtTime(level, t + seconds);
+  }
+
+  function createPadVoice(freq, type, gainLevel, dest) {
+    const osc = ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.value = freq;
+    const detuneOsc = ctx.createOscillator();
+    detuneOsc.type = type === "sawtooth" ? "triangle" : "sine";
+    detuneOsc.frequency.value = freq * 1.002;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 420;
+    filter.Q.value = 0.7;
+    osc.connect(filter);
+    detuneOsc.connect(filter);
+    filter.connect(g);
+    g.connect(dest);
+    const t = now();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gainLevel, t + 2.8);
+    osc.start();
+    detuneOsc.start();
+    return { osc: osc, detuneOsc: detuneOsc, g: g, filter: filter };
+  }
+
+  function startMusicBed(intensity) {
+    // intensity: lower = title (colder), higher = factory (heavier)
+    ensureMusicFx();
+
+    const bed = ctx.createGain();
+    bed.gain.value = 1;
+    bed.connect(musicGain);
+
+    const voices = [];
+    const chord = PAD_CHORDSETS[0];
+    chord.forEach(function (freq, i) {
+      const voice = createPadVoice(
+        freq,
+        i === 0 ? "sine" : i === 1 ? "triangle" : "sawtooth",
+        (i === 0 ? 0.11 : 0.045) * (0.85 + intensity * 0.25),
+        bed
+      );
+      voices.push(voice);
+      padNodes.push(voice.osc, voice.detuneOsc, voice.g, voice.filter);
+    });
+    padNodes.push(bed);
+
+    // Sub heartbeat — slow dread pulse
+    const sub = ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.value = intensity > 0.5 ? 36 : 41;
+    const subGain = ctx.createGain();
+    const subLfo = ctx.createOscillator();
+    subLfo.frequency.value = intensity > 0.5 ? 0.08 : 0.055;
+    const subLfoDepth = ctx.createGain();
+    subLfoDepth.gain.value = intensity > 0.5 ? 0.14 : 0.09;
+    sub.connect(subGain);
+    subGain.connect(musicGain);
+    subLfo.connect(subLfoDepth);
+    subLfoDepth.connect(subGain.gain);
+    sub.start();
+    subLfo.start();
+    subGain.gain.value = intensity > 0.5 ? 0.1 : 0.07;
+    padNodes.push(sub, subGain, subLfo, subLfoDepth);
+
+    // High ghost whistle (barely there)
+    const ghost = ctx.createOscillator();
+    ghost.type = "sine";
+    ghost.frequency.value = 1480;
+    const ghostGain = ctx.createGain();
+    ghostGain.gain.value = 0.012 + intensity * 0.008;
+    const ghostLfo = ctx.createOscillator();
+    ghostLfo.frequency.value = 0.04;
+    const ghostDepth = ctx.createGain();
+    ghostDepth.gain.value = 18;
+    ghostLfo.connect(ghostDepth);
+    ghostDepth.connect(ghost.frequency);
+    ghost.connect(ghostGain);
+    ghostGain.connect(musicGain);
+    ghost.start();
+    ghostLfo.start();
+    padNodes.push(ghost, ghostGain, ghostLfo, ghostDepth);
+
+    // Slowly morph pad chord
+    let chordIndex = 0;
+    function nextChord() {
+      if (ambienceMode === "off" || muted) return;
+      chordIndex = (chordIndex + 1) % PAD_CHORDSETS.length;
+      const next = PAD_CHORDSETS[chordIndex];
+      const t = now();
+      voices.forEach(function (voice, i) {
+        if (!next[i]) return;
+        voice.osc.frequency.cancelScheduledValues(t);
+        voice.detuneOsc.frequency.cancelScheduledValues(t);
+        voice.osc.frequency.setValueAtTime(voice.osc.frequency.value, t);
+        voice.detuneOsc.frequency.setValueAtTime(
+          voice.detuneOsc.frequency.value,
+          t
+        );
+        voice.osc.frequency.linearRampToValueAtTime(next[i], t + 5.5);
+        voice.detuneOsc.frequency.linearRampToValueAtTime(
+          next[i] * 1.002,
+          t + 5.5
+        );
+        voice.filter.frequency.linearRampToValueAtTime(
+          280 + Math.random() * 320,
+          t + 5.5
+        );
+      });
+      chordTimer = setTimeout(nextChord, 9000 + Math.random() * 5000);
+    }
+    chordTimer = setTimeout(nextChord, 7000);
+
+    // Sparse mournful melody
+    function scheduleMelody() {
+      if (ambienceMode === "off" || muted) return;
+      const note = MELODY[(Math.random() * MELODY.length) | 0];
+      const harm = note * (Math.random() > 0.55 ? 1.498 : 1.414);
+      playMelodyNote(note, 0.045 + intensity * 0.02);
+      if (Math.random() > 0.55) {
+        setTimeout(function () {
+          if (ambienceMode === "off") return;
+          playMelodyNote(harm, 0.025 + intensity * 0.015);
+        }, 180 + Math.random() * 400);
+      }
+      const wait = 2200 + Math.random() * 4200;
+      melodyTimer = setTimeout(scheduleMelody, wait);
+    }
+    melodyTimer = setTimeout(scheduleMelody, 1800 + Math.random() * 1500);
+
+    // Breathing swell on music bed
+    breathTimer = setInterval(function () {
+      if (!musicGain || muted || ambienceMode === "off") return;
+      const t = now();
+      const base = intensity > 0.5 ? 0.62 : 0.48;
+      const swell = base + (Math.random() * 0.08 - 0.02);
+      musicGain.gain.cancelScheduledValues(t);
+      musicGain.gain.setValueAtTime(Math.max(0.0001, musicGain.gain.value), t);
+      musicGain.gain.linearRampToValueAtTime(swell, t + 2.2);
+    }, 4800);
+
+    fadeMusicIn(intensity > 0.5 ? 0.62 : 0.48, 3.2);
+  }
+
+  function playMelodyNote(freq, peak) {
+    if (!resume() || !musicGain) return;
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const osc2 = ctx.createOscillator();
+    osc2.type = "triangle";
+    osc2.frequency.value = freq * 0.995;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 1400;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    osc.connect(filter);
+    osc2.connect(filter);
+    filter.connect(g);
+    g.connect(musicGain);
+    const t = now();
+    const dur = 1.8 + Math.random() * 1.4;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(peak, t + 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.start(t);
+    osc2.start(t);
+    osc.stop(t + dur + 0.1);
+    osc2.stop(t + dur + 0.1);
+  }
+
+  function stopMusicBed() {
+    clearTimers();
+    if (musicGain) {
+      const t = now();
+      musicGain.gain.cancelScheduledValues(t);
+      musicGain.gain.setValueAtTime(Math.max(0.0001, musicGain.gain.value), t);
+      musicGain.gain.linearRampToValueAtTime(0.0001, t + 1.2);
+    }
+    const toStop = padNodes.slice();
+    padNodes.length = 0;
+    setTimeout(function () {
+      toStop.forEach(function (node) {
+        try {
+          if (node.stop) node.stop();
+          if (node.disconnect) node.disconnect();
+        } catch (err) {
+          /* ignore */
+        }
+      });
+    }, 1300);
+  }
+
+  function startTitleAmbience() {
+    if (!resume() || ambienceMode === "title") return;
+    stopNodes(factoryNodes);
+    stopNodes(titleNodes);
+    stopMusicBed();
+    clearTimers();
+    ambienceMode = "title";
+
+    // Quiet room tone under the score
+    const drone = ctx.createOscillator();
+    drone.type = "sine";
+    drone.frequency.value = 46;
+    const drone2 = ctx.createOscillator();
+    drone2.type = "triangle";
+    drone2.frequency.value = 69.5;
+    const hum = ctx.createGain();
+    hum.gain.value = 0.07;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 160;
+    drone.connect(filter);
+    drone2.connect(filter);
+    filter.connect(hum);
+    hum.connect(ambientGain);
+    drone.start();
+    drone2.start();
+    titleNodes.push(drone, drone2, hum, filter);
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuffer(2);
+    noise.loop = true;
+    const nFilter = ctx.createBiquadFilter();
+    nFilter.type = "bandpass";
+    nFilter.frequency.value = 700;
+    nFilter.Q.value = 0.5;
+    const nGain = ctx.createGain();
+    nGain.gain.value = 0.012;
+    noise.connect(nFilter);
+    nFilter.connect(nGain);
+    nGain.connect(ambientGain);
+    noise.start();
+    titleNodes.push(noise, nFilter, nGain);
+
+    startMusicBed(0.25);
+
+    flickerTimer = setInterval(function () {
+      if (muted || ambienceMode !== "title") return;
+      if (Math.random() > 0.6) distantTick();
+    }, 3200);
+  }
+
+  function startFactoryAmbience() {
+    if (!resume() || ambienceMode === "factory") return;
+    stopNodes(titleNodes);
+    stopNodes(factoryNodes);
+    stopMusicBed();
+    clearTimers();
+    ambienceMode = "factory";
+
+    const sub = ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.value = 32;
+    const subGain = ctx.createGain();
+    subGain.gain.value = 0.1;
+    sub.connect(subGain);
+    subGain.connect(ambientGain);
+    sub.start();
+    factoryNodes.push(sub, subGain);
+
+    const buzz = ctx.createOscillator();
+    buzz.type = "sawtooth";
+    buzz.frequency.value = 118;
+    const buzzFilter = ctx.createBiquadFilter();
+    buzzFilter.type = "bandpass";
+    buzzFilter.frequency.value = 220;
+    buzzFilter.Q.value = 9;
+    const buzzGain = ctx.createGain();
+    buzzGain.gain.value = 0.018;
+    buzz.connect(buzzFilter);
+    buzzFilter.connect(buzzGain);
+    buzzGain.connect(ambientGain);
+    buzz.start();
+    factoryNodes.push(buzz, buzzFilter, buzzGain);
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuffer(3);
+    noise.loop = true;
+    const nFilter = ctx.createBiquadFilter();
+    nFilter.type = "lowpass";
+    nFilter.frequency.value = 650;
+    const nGain = ctx.createGain();
+    nGain.gain.value = 0.022;
+    noise.connect(nFilter);
+    nFilter.connect(nGain);
+    nGain.connect(ambientGain);
+    noise.start();
+    factoryNodes.push(noise, nFilter, nGain);
+
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.12;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 0.01;
+    lfo.connect(lfoGain);
+    lfoGain.connect(buzzGain.gain);
+    lfo.start();
+    factoryNodes.push(lfo, lfoGain);
+
+    startMusicBed(0.85);
+
+    flickerTimer = setInterval(function () {
+      if (muted || ambienceMode !== "factory") return;
+      if (Math.random() > 0.45) pipeClank();
+      if (Math.random() > 0.75) distantTick();
+    }, 4500);
+  }
+
+  function distantTick() {
+    if (!resume()) return;
+    tone(880 + Math.random() * 220, "sine", 0.025, 0.001, 0.02, 0.25);
+    setTimeout(function () {
+      tone(220 + Math.random() * 40, "triangle", 0.035, 0.01, 0.05, 0.4);
+    }, 40);
+  }
+
+  function pipeClank() {
+    if (!resume()) return;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(0.15);
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = 180 + Math.random() * 120;
+    filter.Q.value = 4;
+    const g = envGain(0.07, 0.001, 0.02, 0.35);
+    src.connect(filter);
+    filter.connect(g);
+    src.start();
+  }
+
+  function enterFactory() {
+    if (!resume()) return;
+    tone(90, "sine", 0.2, 0.05, 0.15, 0.8);
+    tone(180, "triangle", 0.08, 0.08, 0.2, 1.0);
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(0.6);
+    const filter = ctx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.value = 1200;
+    const g = envGain(0.12, 0.02, 0.1, 0.55);
+    src.connect(filter);
+    filter.connect(g);
+    src.start();
+    startFactoryAmbience();
+  }
+
+  function buttonPress() {
+    if (!resume()) return;
+    tone(70, "sine", 0.28, 0.005, 0.04, 0.18);
+    tone(140, "square", 0.06, 0.001, 0.02, 0.12);
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(0.08);
+    const filter = ctx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.value = 2000;
+    const g = envGain(0.1, 0.001, 0.01, 0.08);
+    src.connect(filter);
+    filter.connect(g);
+    src.start();
+  }
+
+  function buttonRelease() {
+    if (!resume()) return;
+    tone(95, "sine", 0.08, 0.001, 0.02, 0.12);
+  }
+
+  function coin() {
+    if (!resume()) return;
+    tone(660, "sine", 0.12, 0.005, 0.05, 0.25);
+    setTimeout(function () {
+      tone(990, "triangle", 0.1, 0.005, 0.06, 0.35);
+    }, 55);
+    setTimeout(function () {
+      tone(1320, "sine", 0.05, 0.005, 0.04, 0.45);
+    }, 120);
+  }
+
+  function death() {
+    if (!resume()) return;
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(220, now());
+    osc.frequency.exponentialRampToValueAtTime(28, now() + 1.4);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now());
+    g.gain.linearRampToValueAtTime(0.22, now() + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, now() + 1.6);
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(1800, now());
+    filter.frequency.exponentialRampToValueAtTime(120, now() + 1.4);
+    osc.connect(filter);
+    filter.connect(g);
+    g.connect(sfxGain);
+    osc.start();
+    osc.stop(now() + 1.7);
+
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(1.2);
+    const nFilter = ctx.createBiquadFilter();
+    nFilter.type = "bandpass";
+    nFilter.frequency.value = 1400;
+    const nGain = envGain(0.2, 0.01, 0.25, 0.9);
+    src.connect(nFilter);
+    nFilter.connect(nGain);
+    src.start();
+
+    [0.15, 0.28, 0.38].forEach(function (delay, i) {
+      setTimeout(function () {
+        tone(440 - i * 90, "square", 0.07, 0.001, 0.03, 0.08);
+      }, delay * 1000);
+    });
+
+    // Music collapses with you
+    if (musicGain) {
+      const t = now();
+      musicGain.gain.cancelScheduledValues(t);
+      musicGain.gain.setValueAtTime(Math.max(0.0001, musicGain.gain.value), t);
+      musicGain.gain.linearRampToValueAtTime(0.08, t + 1.2);
+    }
+    if (ambientGain) {
+      const t = now();
+      ambientGain.gain.cancelScheduledValues(t);
+      ambientGain.gain.setValueAtTime(ambientGain.gain.value, t);
+      ambientGain.gain.linearRampToValueAtTime(0.28, t + 0.9);
+    }
+  }
+
+  function shopUnlock() {
+    if (!resume()) return;
+    const notes = [220, 277, 330, 440, 554];
+    notes.forEach(function (f, i) {
+      setTimeout(function () {
+        tone(f, i % 2 ? "triangle" : "sine", 0.08, 0.01, 0.05, 0.2);
+      }, i * 90);
+    });
+    setTimeout(function () {
+      const src = ctx.createBufferSource();
+      src.buffer = noiseBuffer(0.25);
+      const filter = ctx.createBiquadFilter();
+      filter.type = "highpass";
+      filter.frequency.value = 2500;
+      const g = envGain(0.07, 0.01, 0.05, 0.2);
+      src.connect(filter);
+      filter.connect(g);
+      src.start();
+    }, 480);
+  }
+
+  function upgrade() {
+    if (!resume()) return;
+    tone(320, "sine", 0.1, 0.01, 0.05, 0.2);
+    setTimeout(function () {
+      tone(480, "triangle", 0.1, 0.01, 0.06, 0.25);
+    }, 70);
+    setTimeout(function () {
+      tone(720, "sine", 0.12, 0.01, 0.08, 0.4);
+    }, 150);
+  }
+
+  function returnTitle() {
+    if (!resume()) return;
+    tone(180, "sine", 0.08, 0.02, 0.1, 0.5);
+    if (ambientGain) {
+      const t = now();
+      ambientGain.gain.cancelScheduledValues(t);
+      ambientGain.gain.setValueAtTime(Math.max(0.0001, ambientGain.gain.value), t);
+      ambientGain.gain.linearRampToValueAtTime(0.7, t + 0.8);
+    }
+    startTitleAmbience();
+  }
+
+  function setMuted(next) {
+    muted = !!next;
+    if (!ensure()) return muted;
+    master.gain.setTargetAtTime(muted ? 0 : 0.9, now(), 0.05);
+    return muted;
+  }
+
+  function toggleMute() {
+    return setMuted(!muted);
+  }
+
+  window.ButtonAudio = {
+    unlock: resume,
+    startTitle: startTitleAmbience,
+    enterFactory: enterFactory,
+    buttonPress: buttonPress,
+    buttonRelease: buttonRelease,
+    coin: coin,
+    death: death,
+    shopUnlock: shopUnlock,
+    upgrade: upgrade,
+    returnTitle: returnTitle,
+    setMuted: setMuted,
+    toggleMute: toggleMute,
+    isMuted: function () {
+      return muted;
+    },
+    isStarted: function () {
+      return started;
+    },
+  };
+})();
+
+  </script>
+  <script>
+(function () {
+  "use strict";
+
+  if (typeof THREE === "undefined") {
+    const hint = document.getElementById("enter-hint");
+    if (hint) hint.textContent = "FAILED TO LOAD 3D ENGINE";
+    return;
+  }
+
+  const HIGH_SCORE_KEY = "the-button-high-pulses";
+  const FAIR_STATS_KEY = "the-button-fair-stats";
+  const RUN_SAVE_KEY = "the-button-active-run";
+  const ASCEND_KEY = "the-button-ascend";
+  const SERVERS_KEY = "the-button-servers";
+  const PLAYER_NAME_KEY = "the-button-player-name";
+  const PLAYER_ID_KEY = "the-button-player-id";
+  const LEADERBOARD_KEY = "the-button-leaderboard";
+  // Live shared board (dreamlo). Browser calls go through HTTPS proxies because
+  // dreamlo itself is HTTP-only and gets blocked as "own score only" otherwise.
+  const DREAMLO_PRIVATE = "YCEoF2ZMqEmDZbeKNKEEFAwXGR8Ki-DEWL81BuZ1XuBg";
+  const DREAMLO_PUBLIC = "6ae4b4408f40bb201434c97c";
+  const DREAMLO_ADD =
+    "http://dreamlo.com/lb/" + DREAMLO_PRIVATE + "/add/";
+  const DREAMLO_JSON =
+    "http://dreamlo.com/lb/" + DREAMLO_PUBLIC + "/json";
+  const DREAMLO_JSONP =
+    "http://dreamlo.com/lb/" + DREAMLO_PUBLIC + "/json-jsonp";
+
+  const canvas = document.getElementById("scene");
+  const gamePane = document.getElementById("game-pane");
+  const shopPanel = document.getElementById("shop-panel");
+  const splitHandle = document.getElementById("split-handle");
+  const coinCountEl = document.getElementById("coin-count");
+  const pulseCountEl = document.getElementById("pulse-count");
+  const bestCountEl = document.getElementById("best-count");
+  const oddsDisplayEl = document.getElementById("odds-display");
+  const highScoreEl = document.getElementById("high-score");
+  const fairLineEl = document.getElementById("fair-line");
+  const promptEl = document.getElementById("prompt");
+  const hudStats = document.getElementById("hud-stats");
+  const deathOverlay = document.getElementById("death-overlay");
+  const deathCoinsEl = document.getElementById("death-coins");
+  const retryBtn = document.getElementById("retry-btn");
+  const coinFlash = document.getElementById("coin-flash");
+  const titleScreen = document.getElementById("title-screen");
+  const enterWipe = document.getElementById("enter-wipe");
+  const enterHint = document.getElementById("enter-hint");
+  const shopDeathOddsEl = document.getElementById("shop-death-odds");
+  const shopCoinOddsEl = document.getElementById("shop-coin-odds");
+  const shopUpgradePreviewEl = document.getElementById("shop-upgrade-preview");
+  const shopStrengthPreviewEl = document.getElementById("shop-strength-preview");
+  const shopAutoPreviewEl = document.getElementById("shop-auto-preview");
+  const shopEffectivenessPreviewEl = document.getElementById(
+    "shop-effectiveness-preview"
+  );
+  const shopAscendPreviewEl = document.getElementById("shop-ascend-preview");
+  const shopBuyBtn = document.getElementById("shop-buy-btn");
+  const shopStrengthBtn = document.getElementById("shop-strength-btn");
+  const shopAutoBtn = document.getElementById("shop-auto-btn");
+  const shopEffectivenessBtn = document.getElementById("shop-effectiveness-btn");
+  const shopAscendBtn = document.getElementById("shop-ascend-btn");
+  const shopBuyMsg = document.getElementById("shop-buy-msg");
+  const autoCountEl = document.getElementById("auto-count");
+  const deathPulsesEl = document.getElementById("death-pulses");
+  const deathCodeEl = document.getElementById("death-code");
+  const deathTitleEl = document.getElementById("death-title");
+  const deathSubEl = document.getElementById("death-sub");
+  const buyQtyBar = document.getElementById("buy-qty");
+  const hookOverlay = document.getElementById("hook-overlay");
+  const ascendLineEl = document.getElementById("ascend-line");
+  const serversBtn = document.getElementById("servers-btn");
+  const serversPanel = document.getElementById("servers-panel");
+  const serversList = document.getElementById("servers-list");
+  const serversEmpty = document.getElementById("servers-empty");
+  const serversClose = document.getElementById("servers-close");
+  const enterGameBtn = document.getElementById("enter-game-btn");
+  const mainMenuBtn = document.getElementById("main-menu-btn");
+  const leaderboardBtn = document.getElementById("leaderboard-btn");
+  const leaderboardPanel = document.getElementById("leaderboard-panel");
+  const leaderboardList = document.getElementById("leaderboard-list");
+  const leaderboardEmpty = document.getElementById("leaderboard-empty");
+  const leaderboardClose = document.getElementById("leaderboard-close");
+  const leaderboardSub = document.getElementById("leaderboard-sub");
+  const changeNameBtn = document.getElementById("change-name-btn");
+  const nameGate = document.getElementById("name-gate");
+  const nameInput = document.getElementById("name-input");
+  const nameConfirmBtn = document.getElementById("name-confirm-btn");
+  const nameGateError = document.getElementById("name-gate-error");
+  const playerLineEl = document.getElementById("player-line");
+
+  const BASE_UPGRADE_COST = 5;
+  const BASE_STRENGTH_COST = 25;
+  const BASE_AUTO_COST = 50;
+  const BASE_EFFECTIVENESS_COST = 500;
+  const BASE_ASCEND_COST = 200;
+  const BASE_DEATH_CHANCE = 0.1;
+
+  let coins = 0;
+  let pulses = 0;
+  let highScore = Number(localStorage.getItem(HIGH_SCORE_KEY) || 0);
+  if (!Number.isFinite(highScore)) highScore = 0;
+  let alive = true;
+  let pressing = false;
+  let resolving = false;
+  let inGame = false;
+  let entering = false;
+  let buttonAppear = 0;
+  let shopOpen = false;
+  let deathChance = BASE_DEATH_CHANCE;
+  let nextUpgradeCost = BASE_UPGRADE_COST;
+  let upgradeLevel = 0;
+  let buttonStrength = 0;
+  let strengthCoinBonus = 0;
+  let nextStrengthCost = BASE_STRENGTH_COST;
+  let autoClicksPerSec = 0;
+  let nextAutoCost = BASE_AUTO_COST;
+  let effectiveness = 0;
+  let nextEffectivenessCost = BASE_EFFECTIVENESS_COST;
+  let buyQty = 1;
+  let autoTimer = null;
+  let shopWidthPct = 34;
+  let buttonShiftX = 0;
+  let buttonShiftTarget = 0;
+  let resizingSplit = false;
+  let rollBag = [];
+  let ascending = false;
+  let currentServerId = null;
+  let playerName = (localStorage.getItem(PLAYER_NAME_KEY) || "").trim();
+
+  let ascendLevel = 0;
+  let ascendCoinBonus = 0;
+  let nextAscendCost = BASE_ASCEND_COST;
+  try {
+    const savedAscend = JSON.parse(localStorage.getItem(ASCEND_KEY) || "{}");
+    if (Number.isFinite(savedAscend.level)) ascendLevel = savedAscend.level | 0;
+    if (Number.isFinite(savedAscend.bonus)) {
+      ascendCoinBonus = Number(savedAscend.bonus);
+    } else {
+      ascendCoinBonus = ascendLevel;
+    }
+    if (Number.isFinite(savedAscend.cost) && savedAscend.cost > 0) {
+      nextAscendCost = savedAscend.cost;
+    } else {
+      nextAscendCost = BASE_ASCEND_COST * Math.pow(2, ascendLevel);
+    }
+  } catch (err) {
+    ascendLevel = 0;
+    ascendCoinBonus = 0;
+    nextAscendCost = BASE_ASCEND_COST;
+  }
+
+  function saveAscend() {
+    localStorage.setItem(
+      ASCEND_KEY,
+      JSON.stringify({
+        level: ascendLevel,
+        bonus: ascendCoinBonus,
+        cost: nextAscendCost,
+      })
+    );
+    updateAscendLine();
+  }
+
+  function formatEffMult(n) {
+    const s = Number(n).toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+    return s || "1";
+  }
+
+  function effectivenessPower() {
+    // Each Effectiveness level multiplies FUTURE upgrade power by 1.5 (not itself).
+    return Math.pow(1.5, effectiveness);
+  }
+
+  function nextStrengthGain() {
+    return 2 * effectivenessPower();
+  }
+
+  function nextAutoGain() {
+    return effectivenessPower();
+  }
+
+  function nextAscendGain() {
+    // Ascension is never scaled by Effectiveness.
+    return 1;
+  }
+
+  function oddsDivisorPerBuy() {
+    // Base ÷2, scaled by current Effectiveness (e.g. ×1.5 → ÷3)
+    return 2 * effectivenessPower();
+  }
+
+  function autoClickRate() {
+    return autoClicksPerSec;
+  }
+
+  function updateAscendLine() {
+    if (ascendLineEl) {
+      ascendLineEl.textContent =
+        "ASCENSION LEVEL " +
+        ascendLevel +
+        " · BASE " +
+        formatEffMult(1 + ascendCoinBonus) +
+        " COIN / CLICK" +
+        (effectiveness > 0
+          ? " · NEXT NON-ASCEND ×" + formatEffMult(effectivenessPower())
+          : "");
+    }
+  }
+
+  function coinsPerClick() {
+    // Bonuses are locked in at purchase time — Effectiveness is not retroactive.
+    return 1 + ascendCoinBonus + strengthCoinBonus;
+  }
+
+  function normalizeName(raw) {
+    return String(raw || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 16);
+  }
+
+  function hasPlayerName() {
+    return normalizeName(playerName).length > 0;
+  }
+
+  function getPlayerId() {
+    let id = "";
+    try {
+      id = String(localStorage.getItem(PLAYER_ID_KEY) || "");
+    } catch (err) {
+      id = "";
+    }
+    if (!/^op[a-z0-9]{10,40}$/i.test(id)) {
+      id =
+        "op" +
+        Math.random().toString(36).slice(2, 10) +
+        Date.now().toString(36);
+      try {
+        localStorage.setItem(PLAYER_ID_KEY, id);
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    return id;
+  }
+
+  let leaderboardPollTimer = 0;
+
+  function updatePlayerLine() {
+    if (playerLineEl) {
+      playerLineEl.textContent = hasPlayerName()
+        ? "OPERATOR · " + playerName.toUpperCase()
+        : "OPERATOR · ???";
+    }
+  }
+
+  function sortLeaderboard(list) {
+    return (list || []).slice().sort(function (a, b) {
+      return (b.pulses | 0) - (a.pulses | 0);
+    });
+  }
+
+  function saveLeaderboardCache(list) {
+    try {
+      localStorage.setItem(
+        LEADERBOARD_KEY,
+        JSON.stringify(sortLeaderboard(list).slice(0, 100))
+      );
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function loadLeaderboardCache() {
+    try {
+      const list = JSON.parse(localStorage.getItem(LEADERBOARD_KEY) || "[]");
+      return Array.isArray(list) ? list : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function bustUrl(url) {
+    return url + (url.indexOf("?") >= 0 ? "&" : "?") + "t=" + Date.now();
+  }
+
+  function proxyUrls(targetUrl) {
+    const inner = bustUrl(targetUrl);
+    return [
+      "https://api.allorigins.win/raw?url=" + encodeURIComponent(inner),
+      "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(inner),
+    ];
+  }
+
+  function fetchTextFirstOk(urls) {
+    let chain = Promise.reject(new Error("no urls"));
+    urls.forEach(function (url) {
+      chain = chain.catch(function () {
+        return fetch(url, { method: "GET", mode: "cors", cache: "no-store" }).then(
+          function (res) {
+            if (!res.ok) throw new Error("http " + res.status);
+            return res.text();
+          }
+        );
+      });
+    });
+    return chain;
+  }
+
+  function parseDreamloEntries(data) {
+    try {
+      if (typeof data === "string") {
+        data = JSON.parse(data);
+      }
+      const board = data && data.dreamlo && data.dreamlo.leaderboard;
+      if (!board || !board.entry) return [];
+      const raw = board.entry;
+      const arr = Array.isArray(raw) ? raw : [raw];
+      return arr
+        .map(function (row) {
+          const id = String(row.name || "").trim();
+          if (!id) return null;
+          const fromText = normalizeName(row.text);
+          const label =
+            fromText ||
+            (/^op[a-z0-9]+$/i.test(id) ? "OPERATOR" : normalizeName(id)) ||
+            "OPERATOR";
+          return {
+            id: id,
+            name: label,
+            pulses: Math.max(0, parseInt(row.score, 10) || 0),
+            date: String(row.date || ""),
+          };
+        })
+        .filter(Boolean);
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function submitScoreOnline(pulsesValue) {
+    const clean = normalizeName(playerName);
+    const score = Math.max(0, pulsesValue | 0);
+    const id = getPlayerId();
+    if (!clean || score <= 0 || !id) return Promise.resolve(false);
+    const direct =
+      DREAMLO_ADD +
+      encodeURIComponent(id) +
+      "/" +
+      encodeURIComponent(String(score)) +
+      "/0/" +
+      encodeURIComponent(clean);
+
+    const attempts = [direct].concat(proxyUrls(direct));
+    return fetchTextFirstOk(attempts)
+      .then(function () {
+        return true;
+      })
+      .catch(function () {
+        try {
+          const img = new Image();
+          img.src = bustUrl(direct);
+        } catch (err) {
+          /* ignore */
+        }
+        return false;
+      });
+  }
+
+  function fetchOnlineLeaderboardJsonp() {
+    return new Promise(function (resolve, reject) {
+      const cbName = "_tbLb" + Date.now();
+      let settled = false;
+      const script = document.createElement("script");
+      const timer = setTimeout(function () {
+        finish(null, new Error("jsonp timeout"));
+      }, 8000);
+
+      function finish(data, err) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          delete window[cbName];
+        } catch (e) {
+          window[cbName] = undefined;
+        }
+        if (script.parentNode) script.parentNode.removeChild(script);
+        if (err) reject(err);
+        else resolve(parseDreamloEntries(data));
+      }
+
+      window[cbName] = function (data) {
+        finish(data, null);
+      };
+      script.onerror = function () {
+        finish(null, new Error("jsonp failed"));
+      };
+      script.src = bustUrl(
+        DREAMLO_JSONP + "?jsonp=" + encodeURIComponent(cbName)
+      );
+      document.head.appendChild(script);
+    });
+  }
+
+  function fetchOnlineLeaderboard() {
+    const direct = bustUrl(DREAMLO_JSON);
+    return fetchTextFirstOk([direct].concat(proxyUrls(DREAMLO_JSON)))
+      .then(function (text) {
+        return parseDreamloEntries(text);
+      })
+      .catch(function () {
+        return fetchOnlineLeaderboardJsonp();
+      });
+  }
+
+  function updateLeaderboardScore() {
+    if (!hasPlayerName()) return Promise.resolve(false);
+    const score = Math.max(0, highScore | 0);
+    if (score <= 0) return Promise.resolve(false);
+    return submitScoreOnline(score);
+  }
+
+  function renderLeaderboard(list, statusText) {
+    if (!leaderboardList) return;
+    const rows = sortLeaderboard(list);
+    const myId = getPlayerId();
+    leaderboardList.innerHTML = "";
+    if (leaderboardEmpty) leaderboardEmpty.hidden = rows.length > 0;
+    if (leaderboardSub) {
+      leaderboardSub.textContent =
+        statusText ||
+        "ALL PLAYERS · OTHER BROWSERS/DEVICES SHOW HERE";
+    }
+    rows.forEach(function (entry, i) {
+      const row = document.createElement("div");
+      const isYou = entry.id && entry.id === myId;
+      row.className = "lb-row" + (isYou ? " is-you" : "");
+
+      const rank = document.createElement("div");
+      rank.className = "lb-rank";
+      rank.textContent = String(i + 1);
+
+      const meta = document.createElement("div");
+      meta.className = "lb-meta";
+
+      const nameEl = document.createElement("div");
+      nameEl.className = "lb-name";
+      nameEl.textContent =
+        String(entry.name || "UNKNOWN").toUpperCase() + (isYou ? " · YOU" : "");
+
+      const dateEl = document.createElement("div");
+      dateEl.className = "lb-date";
+      dateEl.textContent = entry.date
+        ? "UPDATED · " + entry.date
+        : "LIVE RECORD";
+
+      meta.appendChild(nameEl);
+      meta.appendChild(dateEl);
+
+      const score = document.createElement("div");
+      score.className = "lb-score";
+      score.textContent = formatCoins(entry.pulses | 0);
+
+      row.appendChild(rank);
+      row.appendChild(meta);
+      row.appendChild(score);
+      leaderboardList.appendChild(row);
+    });
+  }
+
+  function refreshLeaderboardView() {
+    return fetchOnlineLeaderboard()
+      .then(function (online) {
+        saveLeaderboardCache(online);
+        const n = online.length;
+        renderLeaderboard(
+          online,
+          n
+            ? "LIVE · " +
+                n +
+                " PLAYER" +
+                (n === 1 ? "" : "S") +
+                " · RENAME ≠ NEW ACCOUNT"
+            : "LIVE · NO SCORES YET — PLAY, THEN REOPEN"
+        );
+        return online;
+      })
+      .catch(function () {
+        const cached = loadLeaderboardCache();
+        renderLeaderboard(
+          cached,
+          cached.length
+            ? "OFFLINE CACHE · COULD NOT REACH GLOBAL BOARD"
+            : "COULD NOT REACH LIVE BOARD"
+        );
+        return cached;
+      });
+  }
+
+  function openLeaderboard() {
+    if (!hasPlayerName()) {
+      openNameGate(true);
+      return;
+    }
+    closeServersPanel();
+    if (leaderboardPanel) leaderboardPanel.hidden = false;
+    renderLeaderboard(loadLeaderboardCache(), "UPLOADING + SYNCING ALL PLAYERS…");
+
+    updateLeaderboardScore()
+      .catch(function () {
+        return false;
+      })
+      .then(function () {
+        return refreshLeaderboardView();
+      });
+
+    if (leaderboardPollTimer) clearInterval(leaderboardPollTimer);
+    leaderboardPollTimer = setInterval(function () {
+      if (!leaderboardPanel || leaderboardPanel.hidden) return;
+      refreshLeaderboardView();
+    }, 5000);
+  }
+
+  function closeLeaderboard() {
+    if (leaderboardPanel) leaderboardPanel.hidden = true;
+    if (leaderboardPollTimer) {
+      clearInterval(leaderboardPollTimer);
+      leaderboardPollTimer = 0;
+    }
+  }
+
+  function openNameGate(force) {
+    if (!nameGate) return;
+    if (!force && hasPlayerName()) return;
+    nameGate.hidden = false;
+    if (nameInput) {
+      nameInput.value = playerName || "";
+      setTimeout(function () {
+        nameInput.focus();
+        nameInput.select();
+      }, 50);
+    }
+    if (nameGateError) nameGateError.textContent = "";
+  }
+
+  function closeNameGate() {
+    if (nameGate) nameGate.hidden = true;
+  }
+
+  function confirmPlayerName() {
+    const next = normalizeName(nameInput ? nameInput.value : "");
+    if (!next) {
+      if (nameGateError) nameGateError.textContent = "NAME REQUIRED";
+      return false;
+    }
+    if (!/^[a-zA-Z0-9 _.\-]+$/.test(next)) {
+      if (nameGateError) {
+        nameGateError.textContent = "USE LETTERS, NUMBERS, SPACES ONLY";
+      }
+      return false;
+    }
+    playerName = next;
+    localStorage.setItem(PLAYER_NAME_KEY, playerName);
+    updatePlayerLine();
+    updateLeaderboardScore();
+    closeNameGate();
+    if (enterHint) enterHint.textContent = "SAVED RUNS APPEAR UNDER SERVERS";
+    return true;
+  }
+
+  function ensureNamedOrGate() {
+    if (hasPlayerName()) return true;
+    openNameGate(true);
+    if (nameGateError) nameGateError.textContent = "ENTER A NAME TO PLAY";
+    return false;
+  }
+
+  /** Sum of start + 2*start + 4*start + ... for n buys (exact sequential prices) */
+  function bulkCost(startCost, n) {
+    if (n <= 0) return 0;
+    let total = 0;
+    let cost = startCost;
+    for (let i = 0; i < n; i++) {
+      total += cost;
+      if (!Number.isFinite(total)) return Infinity;
+      cost *= 2;
+      if (!Number.isFinite(cost) && i < n - 1) return Infinity;
+    }
+    return total;
+  }
+
+  function canAfford(total) {
+    return Number.isFinite(total) && coins >= total;
+  }
+
+  function formatCoins(n) {
+    if (!Number.isFinite(n)) return "∞";
+    if (n >= 1e15) return n.toExponential(2).replace(/e\+?/, "e");
+    if (n >= 1e9) return (n / 1e9).toFixed(2).replace(/\.?0+$/, "") + "B";
+    if (n >= 1e6) return (n / 1e6).toFixed(2).replace(/\.?0+$/, "") + "M";
+    if (n >= 1e4) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+    if (Number.isInteger(n)) return String(n);
+    return String(Math.round(n));
+  }
+
+  function stopAutoClicker() {
+    if (autoTimer) {
+      clearInterval(autoTimer);
+      autoTimer = null;
+    }
+  }
+
+  function syncAutoClicker() {
+    stopAutoClicker();
+    const rate = autoClickRate();
+    if (!inGame || !alive || rate <= 0) return;
+    const ms = Math.max(16, 1000 / rate);
+    autoTimer = setInterval(function () {
+      if (!inGame || !alive || resolving || pressing) return;
+      performPress(true);
+    }, ms);
+  }
+
+  function buildRunSnapshot() {
+    return {
+      coins: coins,
+      pulses: pulses,
+      alive: alive,
+      deathChance: deathChance,
+      nextUpgradeCost: nextUpgradeCost,
+      upgradeLevel: upgradeLevel,
+      buttonStrength: buttonStrength,
+      strengthCoinBonus: strengthCoinBonus,
+      nextStrengthCost: nextStrengthCost,
+      autoClicksPerSec: autoClicksPerSec,
+      nextAutoCost: nextAutoCost,
+      effectiveness: effectiveness,
+      nextEffectivenessCost: nextEffectivenessCost,
+      buyQty: buyQty,
+      shopOpen: shopOpen,
+      shopWidthPct: shopWidthPct,
+      rollBag: rollBag,
+      shopMsg: shopBuyMsg ? shopBuyMsg.textContent : "",
+      shopMsgOk: shopBuyMsg ? shopBuyMsg.classList.contains("is-ok") : false,
+      serverId: currentServerId,
+    };
+  }
+
+  function saveActiveRun() {
+    if (!inGame) return;
+    try {
+      localStorage.setItem(RUN_SAVE_KEY, JSON.stringify(buildRunSnapshot()));
+    } catch (err) {
+      /* quota / private mode */
+    }
+  }
+
+  function clearActiveRun() {
+    try {
+      localStorage.removeItem(RUN_SAVE_KEY);
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function readActiveRun() {
+    try {
+      const raw = localStorage.getItem(RUN_SAVE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!data || typeof data.coins !== "number") return null;
+      return data;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function loadServers() {
+    try {
+      const list = JSON.parse(localStorage.getItem(SERVERS_KEY) || "[]");
+      return Array.isArray(list) ? list : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function saveServers(list) {
+    try {
+      localStorage.setItem(SERVERS_KEY, JSON.stringify(list.slice(0, 24)));
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function makeServerName(run) {
+    return (
+      "FACTORY · " +
+      (run.pulses | 0) +
+      "P / " +
+      formatCoins(run.coins | 0) +
+      "C"
+    );
+  }
+
+  function upsertServerFromCurrentRun() {
+    const snapshot = buildRunSnapshot();
+    const list = loadServers();
+    const now = Date.now();
+    if (currentServerId) {
+      const idx = list.findIndex(function (s) {
+        return s.id === currentServerId;
+      });
+      if (idx >= 0) {
+        list[idx].run = snapshot;
+        list[idx].name = makeServerName(snapshot);
+        list[idx].savedAt = now;
+        saveServers(list);
+        return list[idx];
+      }
+    }
+    const server = {
+      id: "srv-" + now + "-" + Math.random().toString(36).slice(2, 7),
+      name: makeServerName(snapshot),
+      savedAt: now,
+      run: snapshot,
+    };
+    list.unshift(server);
+    saveServers(list);
+    currentServerId = server.id;
+    return server;
+  }
+
+  function removeServer(id) {
+    if (!id) return;
+    saveServers(
+      loadServers().filter(function (s) {
+        return s.id !== id;
+      })
+    );
+  }
+
+  function renderServersList() {
+    if (!serversList) return;
+    const list = loadServers();
+    serversList.innerHTML = "";
+    if (serversEmpty) serversEmpty.hidden = list.length > 0;
+    list.forEach(function (server) {
+      const row = document.createElement("div");
+      row.className = "server-row";
+
+      const info = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = "server-name";
+      name.textContent = server.name || "UNKNOWN SIGNAL";
+      const meta = document.createElement("span");
+      meta.className = "server-meta";
+      const when = server.savedAt
+        ? new Date(server.savedAt).toLocaleString()
+        : "";
+      meta.textContent = when;
+      info.appendChild(name);
+      info.appendChild(meta);
+
+      const joinBtn = document.createElement("button");
+      joinBtn.type = "button";
+      joinBtn.className = "server-join";
+      joinBtn.textContent = "JOIN";
+      joinBtn.addEventListener("click", function (event) {
+        event.stopPropagation();
+        joinServer(server.id);
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "server-delete";
+      delBtn.textContent = "DEL";
+      delBtn.addEventListener("click", function (event) {
+        event.stopPropagation();
+        removeServer(server.id);
+        renderServersList();
+      });
+
+      row.appendChild(info);
+      row.appendChild(joinBtn);
+      row.appendChild(delBtn);
+      serversList.appendChild(row);
+    });
+  }
+
+  function openServersPanel() {
+    if (!serversPanel) return;
+    renderServersList();
+    serversPanel.hidden = false;
+  }
+
+  function closeServersPanel() {
+    if (!serversPanel) return;
+    serversPanel.hidden = true;
+  }
+
+  function joinServer(id) {
+    if (!ensureNamedOrGate()) return;
+    const server = loadServers().find(function (s) {
+      return s.id === id;
+    });
+    if (!server || !server.run) return;
+    closeServersPanel();
+    closeLeaderboard();
+    currentServerId = server.id;
+    resumeActiveRun(server.run);
+  }
+
+  function shuffleInPlace(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const buf = new Uint32Array(1);
+      if (window.crypto && window.crypto.getRandomValues) {
+        window.crypto.getRandomValues(buf);
+        var j = buf[0] % (i + 1);
+      } else {
+        var j = (Math.random() * (i + 1)) | 0;
+      }
+      const tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
+    return arr;
+  }
+
+  const MAX_FAIR_BAG = 5000;
+
+  /** Exact fair decks from death % (10% → 9 coin + 1 death, 5% → 19 + 1, etc.) */
+  function refillRollBag() {
+    if (deathChance <= 0) {
+      rollBag = [true];
+      return;
+    }
+    const ideal = Math.max(2, Math.round(1 / deathChance));
+    // Cap bag size so deep odds / bulk buys can't freeze the tab
+    if (ideal > MAX_FAIR_BAG) {
+      rollBag = [];
+      return;
+    }
+    rollBag = [];
+    for (let i = 0; i < ideal - 1; i++) rollBag.push(true);
+    rollBag.push(false);
+    shuffleInPlace(rollBag);
+  }
+
+  let fairStats = { coins: 0, deaths: 0 };
+  try {
+    const savedFair = JSON.parse(localStorage.getItem(FAIR_STATS_KEY) || "{}");
+    if (Number.isFinite(savedFair.coins)) fairStats.coins = savedFair.coins | 0;
+    if (Number.isFinite(savedFair.deaths)) fairStats.deaths = savedFair.deaths | 0;
+  } catch (err) {
+    fairStats = { coins: 0, deaths: 0 };
+  }
+
+  function updateFairLine() {
+    const total = fairStats.coins + fairStats.deaths;
+    const pct =
+      total > 0 ? Math.round((fairStats.coins / total) * 100) : 50;
+    if (fairLineEl) {
+      fairLineEl.textContent =
+        "LIFETIME ROLLS · " +
+        fairStats.coins +
+        " COIN / " +
+        fairStats.deaths +
+        " DEATH · " +
+        pct +
+        "% COIN";
+    }
+  }
+
+  function saveFairStats() {
+    localStorage.setItem(FAIR_STATS_KEY, JSON.stringify(fairStats));
+    updateFairLine();
+  }
+
+  /** Draw from a fair shuffled bag so streaks can't lie about the odds */
+  function rollGotCoin() {
+    if (deathChance <= 0) return true;
+    if (!rollBag.length) refillRollBag();
+    if (!rollBag.length) {
+      // Bag too large to materialize — fall back to direct chance
+      return Math.random() >= deathChance;
+    }
+    return rollBag.pop();
+  }
+
+  function formatPct(chance) {
+    const pct = chance * 100;
+    if (!(pct > 0)) return "0%";
+    if (pct >= 10) return Math.round(pct * 10) / 10 + "%";
+    if (pct >= 1) return Math.round(pct * 100) / 100 + "%";
+    // Always plain 0.000… decimals — never scientific e-notation
+    const decimals =
+      pct >= 0.01
+        ? 3
+        : Math.min(12, Math.max(4, Math.ceil(-Math.log10(pct)) + 1));
+    let s = pct.toFixed(decimals).replace(/0+$/, "").replace(/\.$/, "");
+    if (s.charAt(0) === ".") s = "0" + s;
+    return s + "%";
+  }
+
+  function oddsPromptText() {
+    const death = formatPct(deathChance);
+    const coin = formatPct(1 - deathChance);
+    return coin + " COIN · " + death + " DEATH";
+  }
+
+  function updateOddsUI() {
+    const deathText = formatPct(deathChance);
+    const coinText = formatPct(1 - deathChance);
+    const oddsTotal = bulkCost(nextUpgradeCost, buyQty);
+    const strengthTotal = bulkCost(nextStrengthCost, buyQty);
+    const autoTotal = bulkCost(nextAutoCost, buyQty);
+    const effectivenessTotal = bulkCost(nextEffectivenessCost, buyQty);
+    const eff = effectivenessPower();
+    const afterOddsDeath =
+      deathChance / Math.pow(oddsDivisorPerBuy(), buyQty);
+    const strengthGain = nextStrengthGain();
+    const afterStrength = coinsPerClick() + buyQty * strengthGain;
+    const autoGain = nextAutoGain();
+    const afterAuto = autoClickRate() + buyQty * autoGain;
+    const baseCoins = 1 + ascendCoinBonus;
+    const afterAscendBase = baseCoins + nextAscendGain();
+    const afterEff = Math.pow(1.5, effectiveness + buyQty);
+
+    if (oddsDisplayEl) oddsDisplayEl.textContent = deathText;
+    if (shopDeathOddsEl) shopDeathOddsEl.textContent = deathText;
+    if (shopCoinOddsEl) {
+      shopCoinOddsEl.textContent =
+        "COIN CHANCE " +
+        coinText +
+        " · +" +
+        formatEffMult(coinsPerClick()) +
+        " / CLICK (BASE " +
+        formatEffMult(baseCoins) +
+        (effectiveness > 0
+          ? " · NEXT UPGRADES ×" + formatEffMult(eff)
+          : "") +
+        ")";
+    }
+    if (autoCountEl) {
+      autoCountEl.textContent = formatEffMult(autoClickRate()) + "/s";
+    }
+    updateAscendLine();
+
+    if (shopUpgradePreviewEl) {
+      shopUpgradePreviewEl.textContent =
+        "x" +
+        buyQty +
+        " · " +
+        formatPct(deathChance) +
+        " → " +
+        formatPct(afterOddsDeath) +
+        " DEATH · ÷" +
+        formatEffMult(oddsDivisorPerBuy()) +
+        " · COST " +
+        formatCoins(oddsTotal);
+    }
+    if (shopStrengthPreviewEl) {
+      shopStrengthPreviewEl.textContent =
+        "x" +
+        buyQty +
+        " · +" +
+        formatEffMult(coinsPerClick()) +
+        " → +" +
+        formatEffMult(afterStrength) +
+        " / CLICK (+" +
+        formatEffMult(strengthGain) +
+        " EACH) · COST " +
+        formatCoins(strengthTotal);
+    }
+    if (shopAutoPreviewEl) {
+      shopAutoPreviewEl.textContent =
+        "x" +
+        buyQty +
+        " · " +
+        formatEffMult(autoClickRate()) +
+        " → " +
+        formatEffMult(afterAuto) +
+        " / SEC · COST " +
+        formatCoins(autoTotal);
+    }
+    if (shopEffectivenessPreviewEl) {
+      shopEffectivenessPreviewEl.textContent =
+        "x" +
+        buyQty +
+        " · ×" +
+        formatEffMult(eff) +
+        " → ×" +
+        formatEffMult(afterEff) +
+        " FUTURE POWER · COST " +
+        formatCoins(effectivenessTotal);
+    }
+    if (shopBuyBtn) {
+      shopBuyBtn.disabled =
+        !alive || !shopOpen || ascending || !canAfford(oddsTotal);
+      shopBuyBtn.textContent =
+        "BUY x" + buyQty + " · " + formatCoins(oddsTotal);
+    }
+    if (shopStrengthBtn) {
+      shopStrengthBtn.disabled =
+        !alive || !shopOpen || ascending || !canAfford(strengthTotal);
+      shopStrengthBtn.textContent =
+        "BUY x" + buyQty + " · " + formatCoins(strengthTotal);
+    }
+    if (shopAutoBtn) {
+      shopAutoBtn.disabled =
+        !alive || !shopOpen || ascending || !canAfford(autoTotal);
+      shopAutoBtn.textContent =
+        "BUY x" + buyQty + " · " + formatCoins(autoTotal);
+    }
+    if (shopEffectivenessBtn) {
+      shopEffectivenessBtn.disabled =
+        !alive || !shopOpen || ascending || !canAfford(effectivenessTotal);
+      shopEffectivenessBtn.textContent =
+        "BUY x" + buyQty + " · " + formatCoins(effectivenessTotal);
+    }
+    if (shopAscendPreviewEl) {
+      shopAscendPreviewEl.textContent =
+        "NEXT · BASE " +
+        formatEffMult(baseCoins) +
+        " → " +
+        formatEffMult(afterAscendBase) +
+        " / CLICK · COST " +
+        formatCoins(nextAscendCost);
+    }
+    if (shopAscendBtn) {
+      shopAscendBtn.disabled =
+        !alive || !shopOpen || ascending || !canAfford(nextAscendCost);
+      shopAscendBtn.textContent =
+        "ASCEND · " + formatCoins(nextAscendCost);
+    }
+  }
+
+  function applyShopLayout() {
+    if (shopOpen) {
+      document.documentElement.style.setProperty(
+        "--shop-width",
+        shopWidthPct + "%"
+      );
+      document.body.classList.add("has-shop");
+      shopPanel.hidden = false;
+      splitHandle.hidden = false;
+      buttonShiftTarget = -1.15;
+    } else {
+      document.body.classList.remove("has-shop", "is-shop-opening");
+      shopPanel.hidden = true;
+      splitHandle.hidden = true;
+      buttonShiftTarget = 0;
+      buttonShiftX = 0;
+    }
+    resize();
+    updateOddsUI();
+  }
+
+  function audio() {
+    return window.ButtonAudio || null;
+  }
+
+  function openShop(silent) {
+    if (shopOpen) return;
+    shopOpen = true;
+    if (!silent && audio()) audio().shopUnlock();
+    if (!silent) document.body.classList.add("is-shop-opening");
+    applyShopLayout();
+    if (shopBuyMsg && !silent) {
+      shopBuyMsg.textContent = "MENU ONLINE · UPLINK STABLE";
+      shopBuyMsg.classList.add("is-ok");
+    }
+    if (!silent) promptEl.textContent = "DIGITAL MENU UNLOCKED";
+    setTimeout(function () {
+      document.body.classList.remove("is-shop-opening");
+      if (alive && inGame && !silent) promptEl.textContent = oddsPromptText();
+    }, silent ? 0 : 900);
+    saveActiveRun();
+  }
+
+  function denyPurchase() {
+    if (shopBuyMsg) {
+      shopBuyMsg.textContent = "NOT ENOUGH COINS";
+      shopBuyMsg.classList.remove("is-ok");
+    }
+    if (audio()) audio().buttonRelease();
+  }
+
+  function buyHigherOdds() {
+    if (!shopOpen || !alive || !inGame || ascending) return;
+    const qty = buyQty;
+    const total = bulkCost(nextUpgradeCost, qty);
+    if (!canAfford(total)) {
+      denyPurchase();
+      return;
+    }
+
+    coins -= total;
+    coinCountEl.textContent = String(coins);
+    for (let i = 0; i < qty; i++) {
+      deathChance = deathChance / oddsDivisorPerBuy();
+      upgradeLevel += 1;
+      nextUpgradeCost = nextUpgradeCost * 2;
+    }
+    refillRollBag();
+    if (audio()) audio().upgrade();
+
+    shopBuyMsg.textContent =
+      "UPGRADED x" + qty + " · DEATH NOW " + formatPct(deathChance);
+    shopBuyMsg.classList.add("is-ok");
+    promptEl.textContent = "ODDS UPGRADED · " + oddsPromptText();
+    updateOddsUI();
+    saveActiveRun();
+
+    setTimeout(function () {
+      if (alive && inGame) promptEl.textContent = oddsPromptText();
+    }, 1100);
+  }
+
+  function buyButtonStrength() {
+    if (!shopOpen || !alive || !inGame || ascending) return;
+    const qty = buyQty;
+    const total = bulkCost(nextStrengthCost, qty);
+    if (!canAfford(total)) {
+      denyPurchase();
+      return;
+    }
+
+    coins -= total;
+    coinCountEl.textContent = String(coins);
+    for (let i = 0; i < qty; i++) {
+      strengthCoinBonus += nextStrengthGain();
+      buttonStrength += 1;
+      nextStrengthCost = nextStrengthCost * 2;
+    }
+    if (audio()) audio().upgrade();
+
+    shopBuyMsg.textContent =
+      "STRENGTH x" +
+      qty +
+      " · +" +
+      formatEffMult(coinsPerClick()) +
+      " / CLICK";
+    shopBuyMsg.classList.add("is-ok");
+    promptEl.textContent =
+      "BUTTON STRENGTH · +" + formatEffMult(coinsPerClick()) + " / CLICK";
+    updateOddsUI();
+    saveActiveRun();
+
+    setTimeout(function () {
+      if (alive && inGame) promptEl.textContent = oddsPromptText();
+    }, 1100);
+  }
+
+  function buyAutoClicker() {
+    if (!shopOpen || !alive || !inGame || ascending) return;
+    const qty = buyQty;
+    const total = bulkCost(nextAutoCost, qty);
+    if (!canAfford(total)) {
+      denyPurchase();
+      return;
+    }
+
+    coins -= total;
+    coinCountEl.textContent = String(coins);
+    for (let i = 0; i < qty; i++) {
+      autoClicksPerSec += nextAutoGain();
+      nextAutoCost = nextAutoCost * 2;
+    }
+    if (audio()) audio().upgrade();
+
+    shopBuyMsg.textContent =
+      "AUTO x" +
+      qty +
+      " · " +
+      formatEffMult(autoClickRate()) +
+      " CLICKS / SEC";
+    shopBuyMsg.classList.add("is-ok");
+    promptEl.textContent =
+      "AUTO CLICKER · " + formatEffMult(autoClickRate()) + " / SEC";
+    updateOddsUI();
+    syncAutoClicker();
+    saveActiveRun();
+
+    setTimeout(function () {
+      if (alive && inGame) promptEl.textContent = oddsPromptText();
+    }, 1100);
+  }
+
+  function buyEffectiveness() {
+    if (!shopOpen || !alive || !inGame || ascending) return;
+    const qty = buyQty;
+    const total = bulkCost(nextEffectivenessCost, qty);
+    if (!canAfford(total)) {
+      denyPurchase();
+      return;
+    }
+
+    coins -= total;
+    coinCountEl.textContent = String(coins);
+    for (let i = 0; i < qty; i++) {
+      effectiveness += 1;
+      nextEffectivenessCost = nextEffectivenessCost * 2;
+    }
+    // Only future purchases are stronger — do not touch current odds/strength/auto.
+    if (audio()) audio().upgrade();
+
+    shopBuyMsg.textContent =
+      "EFFECTIVENESS x" +
+      qty +
+      " · FUTURE UPGRADES ×" +
+      formatEffMult(effectivenessPower());
+    shopBuyMsg.classList.add("is-ok");
+    promptEl.textContent =
+      "EFFECTIVENESS · ×" +
+      formatEffMult(effectivenessPower()) +
+      " FUTURE POWER";
+    updateOddsUI();
+    saveActiveRun();
+
+    setTimeout(function () {
+      if (alive && inGame) promptEl.textContent = oddsPromptText();
+    }, 1100);
+  }
+
+  function setBuyQty(qty) {
+    buyQty = qty;
+    if (buyQtyBar) {
+      buyQtyBar.querySelectorAll(".buy-qty-btn").forEach(function (btn) {
+        btn.classList.toggle("is-active", Number(btn.dataset.qty) === qty);
+      });
+    }
+    updateOddsUI();
+    saveActiveRun();
+  }
+
+  function buyAscend() {
+    if (!shopOpen || !alive || !inGame || ascending) return;
+    if (!canAfford(nextAscendCost)) {
+      denyPurchase();
+      return;
+    }
+
+    coins -= nextAscendCost;
+    coinCountEl.textContent = String(coins);
+    ascendCoinBonus += nextAscendGain();
+    ascendLevel += 1;
+    nextAscendCost = nextAscendCost * 2;
+    saveAscend();
+    ascending = true;
+    stopAutoClicker();
+    updateOddsUI();
+    syncNewRunBtn();
+    syncMainMenuBtn();
+    saveActiveRun();
+
+    if (shopBuyMsg) {
+      shopBuyMsg.textContent =
+        "ASCENSION " +
+        ascendLevel +
+        " · BASE " +
+        formatEffMult(1 + ascendCoinBonus) +
+        " / CLICK";
+      shopBuyMsg.classList.add("is-ok");
+    }
+    promptEl.textContent = "THE HOOK COMES";
+
+    if (audio()) audio().upgrade();
+    playHookAscend();
+  }
+
+  function playHookAscend() {
+    if (hookOverlay) {
+      hookOverlay.hidden = false;
+      hookOverlay.classList.add("is-active");
+    }
+    document.body.classList.add("is-hooked");
+
+    // Camera yanked upward with the hook
+    const startY = camera.position.y;
+    const startZ = camera.position.z;
+    const t0 = performance.now();
+    const duration = 2300;
+
+    function yankFrame(now) {
+      const u = Math.min(1, (now - t0) / duration);
+      const ease = u * u * u;
+      camera.position.y = startY + ease * 18;
+      camera.position.z = startZ - ease * 4;
+      camera.rotation.z = ease * 0.45;
+      camera.lookAt(buttonShiftX, 0.7 + ease * 10, 0);
+      if (u < 1 && ascending) {
+        requestAnimationFrame(yankFrame);
+      }
+    }
+    requestAnimationFrame(yankFrame);
+
+    setTimeout(function () {
+      if (hookOverlay) {
+        hookOverlay.hidden = true;
+        hookOverlay.classList.remove("is-active");
+      }
+      document.body.classList.remove("is-hooked");
+      camera.position.y = startY;
+      camera.position.z = startZ;
+      camera.rotation.z = 0;
+      die(false, true);
+      ascending = false;
+    }, 2400);
+  }
+
+  highScoreEl.textContent = String(highScore);
+  bestCountEl.textContent = String(highScore);
+  updateFairLine();
+  updateAscendLine();
+  updatePlayerLine();
+  updateOddsUI();
+  if (hasPlayerName()) {
+    updateLeaderboardScore();
+    if (enterHint) enterHint.textContent = "SAVED RUNS APPEAR UNDER SERVERS";
+  } else {
+    openNameGate(true);
+  }
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x040706);
+  scene.fog = new THREE.FogExp2(0x040706, 0.026);
+
+  const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 100);
+  camera.position.set(0, 1.28, 3.35);
+  camera.lookAt(0, 0.7, 0);
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas: canvas,
+    antialias: true,
+    alpha: false,
+    powerPreference: "high-performance",
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  if ("outputColorSpace" in renderer) {
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+  }
+  if ("toneMapping" in renderer) {
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+  }
+
+  const ambient = new THREE.AmbientLight(0x1c3a2e, 0.62);
+  scene.add(ambient);
+
+  const fill = new THREE.DirectionalLight(0x4a8a68, 0.4);
+  fill.position.set(-4, 6, 3);
+  scene.add(fill);
+
+  const overhead = new THREE.PointLight(0x7dffb0, 0.62, 18, 2);
+  overhead.position.set(0, 4.2, 1.5);
+  scene.add(overhead);
+
+  const buttonGlow = new THREE.PointLight(0xff2a22, 0, 12, 1.6);
+  buttonGlow.position.set(0, 1.2, 0.35);
+  scene.add(buttonGlow);
+
+  const buttonFill = new THREE.PointLight(0xff6655, 0, 6, 2);
+  buttonFill.position.set(0.15, 1.9, 1.1);
+  scene.add(buttonFill);
+
+  const rim = new THREE.SpotLight(0xff4444, 0, 14, Math.PI / 4.5, 0.4, 1);
+  rim.position.set(0, 3.4, 2.8);
+  rim.target.position.set(0, 1.2, 0);
+  scene.add(rim);
+  scene.add(rim.target);
+
+  function makeFloor() {
+    const geo = new THREE.PlaneGeometry(40, 40, 48, 48);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x0a110e,
+      roughness: 0.88,
+      metalness: 0.22,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+
+    const grid = new THREE.GridHelper(40, 40, 0x24553c, 0x102a1e);
+    grid.position.y = 0.012;
+    grid.material.transparent = true;
+    grid.material.opacity = 0.38;
+    scene.add(grid);
+
+    const plateMat = new THREE.MeshStandardMaterial({
+      color: 0x121a16,
+      metalness: 0.55,
+      roughness: 0.5,
+    });
+    for (let gx = -2; gx <= 2; gx++) {
+      for (let gz = -1; gz <= 2; gz++) {
+        if (gx === 0 && gz === 0) continue;
+        const plate = new THREE.Mesh(
+          new THREE.BoxGeometry(1.35, 0.04, 1.35),
+          plateMat
+        );
+        plate.position.set(gx * 1.55, 0.02, gz * 1.55 - 0.4);
+        plate.receiveShadow = true;
+        scene.add(plate);
+      }
+    }
+
+    const hazardMat = new THREE.MeshStandardMaterial({
+      color: 0xc9a227,
+      emissive: 0x5a3e00,
+      emissiveIntensity: 0.35,
+      metalness: 0.2,
+      roughness: 0.55,
+    });
+    const hazardRing = new THREE.Mesh(
+      new THREE.RingGeometry(1.55, 1.78, 64),
+      hazardMat
+    );
+    hazardRing.rotation.x = -Math.PI / 2;
+    hazardRing.position.y = 0.03;
+    scene.add(hazardRing);
+  }
+
+  function makeWalls() {
+    const wallMat = new THREE.MeshStandardMaterial({
+      color: 0x09110e,
+      roughness: 0.92,
+      metalness: 0.08,
+    });
+    const panelMat = new THREE.MeshStandardMaterial({
+      color: 0x0d1814,
+      roughness: 0.7,
+      metalness: 0.25,
+    });
+
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(28, 10), wallMat);
+    back.position.set(0, 5, -6);
+    scene.add(back);
+
+    const left = new THREE.Mesh(new THREE.PlaneGeometry(20, 10), wallMat);
+    left.position.set(-8, 5, 0);
+    left.rotation.y = Math.PI / 2;
+    scene.add(left);
+
+    const right = new THREE.Mesh(new THREE.PlaneGeometry(20, 10), wallMat);
+    right.position.set(8, 5, 0);
+    right.rotation.y = -Math.PI / 2;
+    scene.add(right);
+
+    for (let i = -3; i <= 3; i++) {
+      const panel = new THREE.Mesh(
+        new THREE.BoxGeometry(1.6, 2.4, 0.08),
+        panelMat
+      );
+      panel.position.set(i * 1.85, 2.2, -5.92);
+      scene.add(panel);
+    }
+
+    const pipeMat = new THREE.MeshStandardMaterial({
+      color: 0x1c3228,
+      metalness: 0.82,
+      roughness: 0.28,
+    });
+    const jointMat = new THREE.MeshStandardMaterial({
+      color: 0x2a4034,
+      metalness: 0.7,
+      roughness: 0.35,
+    });
+
+    for (let i = 0; i < 5; i++) {
+      const y = 1.35 + i * 0.7;
+      const pipe = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.09, 0.09, 14, 16),
+        pipeMat
+      );
+      pipe.rotation.z = Math.PI / 2;
+      pipe.position.set(0, y, -5.78);
+      scene.add(pipe);
+
+      [-4.5, 0, 4.5].forEach(function (x) {
+        const joint = new THREE.Mesh(
+          new THREE.TorusGeometry(0.12, 0.04, 8, 16),
+          jointMat
+        );
+        joint.rotation.y = Math.PI / 2;
+        joint.position.set(x, y, -5.78);
+        scene.add(joint);
+      });
+    }
+
+    const verticalPipe = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 5.2, 16),
+      pipeMat
+    );
+    verticalPipe.position.set(-6.8, 2.6, -3.2);
+    scene.add(verticalPipe);
+    const verticalPipe2 = verticalPipe.clone();
+    verticalPipe2.position.set(6.8, 2.6, -3.2);
+    scene.add(verticalPipe2);
+
+    const rackMat = new THREE.MeshStandardMaterial({
+      color: 0x070e0b,
+      metalness: 0.45,
+      roughness: 0.55,
+    });
+    const bayMat = new THREE.MeshStandardMaterial({
+      color: 0x040806,
+      metalness: 0.3,
+      roughness: 0.7,
+    });
+    [-5.6, -3.9, 3.9, 5.6].forEach(function (x, idx) {
+      const rack = new THREE.Mesh(new THREE.BoxGeometry(1.05, 3.4, 0.75), rackMat);
+      rack.position.set(x, 1.7, -4.15);
+      rack.castShadow = true;
+      scene.add(rack);
+
+      for (let row = 0; row < 5; row++) {
+        const bay = new THREE.Mesh(
+          new THREE.BoxGeometry(0.85, 0.38, 0.12),
+          bayMat
+        );
+        bay.position.set(x, 0.55 + row * 0.55, -3.72);
+        scene.add(bay);
+
+        const ledMat = new THREE.MeshStandardMaterial({
+          color: row % 2 === idx % 2 ? 0x3cff8a : 0xff4422,
+          emissive: row % 2 === idx % 2 ? 0x1a8844 : 0xaa2200,
+          emissiveIntensity: 1.1 + (row % 3) * 0.2,
+        });
+        const led = new THREE.Mesh(
+          new THREE.BoxGeometry(0.08, 0.08, 0.04),
+          ledMat
+        );
+        led.position.set(x + 0.32, 0.55 + row * 0.55, -3.64);
+        scene.add(led);
+      }
+
+      const glow = new THREE.PointLight(
+        idx % 2 === 0 ? 0x3cff8a : 0xff4422,
+        0.28,
+        2.8,
+        2
+      );
+      glow.position.set(x, 2.5, -3.7);
+      scene.add(glow);
+    });
+  }
+
+  function makeCeiling() {
+    const ceil = new THREE.Mesh(
+      new THREE.PlaneGeometry(28, 20),
+      new THREE.MeshStandardMaterial({
+        color: 0x060b09,
+        roughness: 0.88,
+        metalness: 0.25,
+      })
+    );
+    ceil.rotation.x = Math.PI / 2;
+    ceil.position.y = 5.5;
+    scene.add(ceil);
+
+    const beamMat = new THREE.MeshStandardMaterial({
+      color: 0x141c18,
+      metalness: 0.6,
+      roughness: 0.4,
+    });
+    [-3, 0, 3].forEach(function (z) {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(16, 0.18, 0.28), beamMat);
+      beam.position.set(0, 5.35, z);
+      scene.add(beam);
+    });
+
+    const fixtureMat = new THREE.MeshStandardMaterial({
+      color: 0xb8ffd0,
+      emissive: 0x2f7a4e,
+      emissiveIntensity: 1.05,
+      roughness: 0.35,
+    });
+    const cageMat = new THREE.MeshStandardMaterial({
+      color: 0x1a2820,
+      metalness: 0.7,
+      roughness: 0.4,
+    });
+
+    [-2.6, 0, 2.6].forEach(function (x) {
+      const cage = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.16, 0.5), cageMat);
+      cage.position.set(x, 5.38, 0.45);
+      scene.add(cage);
+      const fixture = new THREE.Mesh(
+        new THREE.BoxGeometry(1.85, 0.06, 0.32),
+        fixtureMat
+      );
+      fixture.position.set(x, 5.28, 0.45);
+      scene.add(fixture);
+    });
+  }
+
+  const BUTTON_BASE_Y = -0.45;
+  const buttonGroup = new THREE.Group();
+  buttonGroup.visible = false;
+  buttonGroup.position.y = BUTTON_BASE_Y;
+  buttonGroup.scale.set(0.01, 0.01, 0.01);
+  scene.add(buttonGroup);
+
+  function makeConsole() {
+    const baseMat = new THREE.MeshStandardMaterial({
+      color: 0x101612,
+      metalness: 0.62,
+      roughness: 0.36,
+    });
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: 0x171f1a,
+      metalness: 0.75,
+      roughness: 0.28,
+    });
+    const boltMat = new THREE.MeshStandardMaterial({
+      color: 0x9aa8a0,
+      metalness: 0.9,
+      roughness: 0.22,
+    });
+
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.72, 1.02, 0.98, 8),
+      baseMat
+    );
+    pedestal.position.y = 0.49;
+    pedestal.castShadow = true;
+    pedestal.receiveShadow = true;
+    buttonGroup.add(pedestal);
+
+    const foot = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.15, 1.2, 0.12, 8),
+      accentMat
+    );
+    foot.position.y = 0.06;
+    foot.receiveShadow = true;
+    buttonGroup.add(foot);
+
+    const deck = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.2, 1.2, 0.16, 48),
+      accentMat
+    );
+    deck.position.y = 1.02;
+    deck.castShadow = true;
+    deck.receiveShadow = true;
+    buttonGroup.add(deck);
+
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2;
+      const bolt = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.045, 0.045, 0.05, 10),
+        boltMat
+      );
+      bolt.position.set(Math.cos(ang) * 1.02, 1.12, Math.sin(ang) * 1.02);
+      buttonGroup.add(bolt);
+    }
+
+    const well = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.6, 0.6, 0.1, 48),
+      new THREE.MeshStandardMaterial({
+        color: 0x030303,
+        metalness: 0.45,
+        roughness: 0.65,
+      })
+    );
+    well.position.y = 1.12;
+    buttonGroup.add(well);
+
+    const collar = new THREE.Mesh(
+      new THREE.TorusGeometry(0.58, 0.075, 18, 64),
+      new THREE.MeshStandardMaterial({
+        color: 0xd0d8d2,
+        metalness: 0.96,
+        roughness: 0.14,
+        emissive: 0x1a221e,
+        emissiveIntensity: 0.3,
+      })
+    );
+    collar.rotation.x = Math.PI / 2;
+    collar.position.y = 1.18;
+    buttonGroup.add(collar);
+
+    const stripe = new THREE.Mesh(
+      new THREE.TorusGeometry(0.95, 0.035, 10, 64),
+      new THREE.MeshStandardMaterial({
+        color: 0xffcc33,
+        emissive: 0xaa6600,
+        emissiveIntensity: 0.95,
+        metalness: 0.25,
+        roughness: 0.4,
+      })
+    );
+    stripe.rotation.x = Math.PI / 2;
+    stripe.position.y = 1.1;
+    buttonGroup.add(stripe);
+
+    const cableMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1010,
+      roughness: 0.7,
+      metalness: 0.15,
+    });
+    [-0.55, 0.55].forEach(function (x) {
+      const cable = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.05, 1.1, 10),
+        cableMat
+      );
+      cable.position.set(x, 0.55, 0.85);
+      cable.rotation.x = 0.35;
+      buttonGroup.add(cable);
+    });
+  }
+
+  const buttonMat = new THREE.MeshStandardMaterial({
+    color: 0xff1e1e,
+    emissive: 0xff0000,
+    emissiveIntensity: 2.55,
+    metalness: 0.18,
+    roughness: 0.24,
+  });
+
+  const buttonTopMat = new THREE.MeshStandardMaterial({
+    color: 0xff5555,
+    emissive: 0xff2800,
+    emissiveIntensity: 3.0,
+    metalness: 0.12,
+    roughness: 0.18,
+  });
+
+  const buttonMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.48, 0.52, 0.28, 64),
+    buttonMat
+  );
+  buttonMesh.position.y = 1.18;
+  buttonMesh.castShadow = true;
+  buttonMesh.name = "THE_BUTTON";
+  buttonGroup.add(buttonMesh);
+
+  const buttonTop = new THREE.Mesh(
+    new THREE.CircleGeometry(0.46, 64),
+    buttonTopMat
+  );
+  buttonTop.rotation.x = -Math.PI / 2;
+  buttonTop.position.y = 1.322;
+  buttonTop.name = "THE_BUTTON";
+  buttonGroup.add(buttonTop);
+
+  const halo = new THREE.Mesh(
+    new THREE.RingGeometry(0.5, 0.72, 64),
+    new THREE.MeshBasicMaterial({
+      color: 0xff2a10,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })
+  );
+  halo.rotation.x = -Math.PI / 2;
+  halo.position.y = 1.2;
+  buttonGroup.add(halo);
+
+  const glowDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(1.45, 48),
+    new THREE.MeshBasicMaterial({
+      color: 0xff1600,
+      transparent: true,
+      opacity: 0.38,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })
+  );
+  glowDisc.rotation.x = -Math.PI / 2;
+  glowDisc.position.y = 1.11;
+  buttonGroup.add(glowDisc);
+
+  makeFloor();
+  makeWalls();
+  makeCeiling();
+  makeConsole();
+
+  const moteCount = 120;
+  const motePos = new Float32Array(moteCount * 3);
+  for (let i = 0; i < moteCount; i++) {
+    motePos[i * 3] = (Math.random() - 0.5) * 16;
+    motePos[i * 3 + 1] = Math.random() * 5;
+    motePos[i * 3 + 2] = (Math.random() - 0.5) * 10 - 1;
+  }
+  const moteGeo = new THREE.BufferGeometry();
+  moteGeo.setAttribute("position", new THREE.BufferAttribute(motePos, 3));
+  const motes = new THREE.Points(
+    moteGeo,
+    new THREE.PointsMaterial({
+      color: 0x6fff9a,
+      size: 0.035,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    })
+  );
+  scene.add(motes);
+
+  // Invisible larger hit target so the button is easy to click
+  const buttonHit = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.7, 0.7, 0.45, 24),
+    new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    })
+  );
+  buttonHit.position.y = 1.22;
+  buttonHit.name = "THE_BUTTON";
+  buttonGroup.add(buttonHit);
+
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  const interactables = [buttonHit, buttonMesh, buttonTop];
+
+  function resize() {
+    const w = gamePane.clientWidth || window.innerWidth;
+    const h = gamePane.clientHeight || window.innerHeight;
+    camera.aspect = Math.max(w, 1) / Math.max(h, 1);
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  function setPointerFromEvent(event) {
+    const rect = canvas.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  }
+
+  function hitButton() {
+    if (!inGame || buttonAppear < 0.95) return false;
+    raycaster.setFromCamera(pointer, camera);
+    return raycaster.intersectObjects(interactables, false).length > 0;
+  }
+
+  function saveHighScore() {
+    if (pulses > highScore) {
+      highScore = pulses;
+      localStorage.setItem(HIGH_SCORE_KEY, String(highScore));
+    }
+    highScoreEl.textContent = String(highScore);
+    bestCountEl.textContent = String(highScore);
+    if (hasPlayerName()) updateLeaderboardScore();
+  }
+
+  function pressVisual(down, withSound) {
+    pressing = down;
+    buttonMesh.position.y = down ? 1.08 : 1.18;
+    buttonTop.position.y = down ? 1.222 : 1.322;
+    if (typeof buttonHit !== "undefined" && buttonHit) {
+      buttonHit.position.y = down ? 1.12 : 1.22;
+    }
+    buttonGlow.intensity = down ? 7.5 : 5.2 * buttonAppear;
+    buttonFill.intensity = down ? 2.8 : 1.6 * buttonAppear;
+    if (withSound && audio()) {
+      if (down) audio().buttonPress();
+      else audio().buttonRelease();
+    }
+  }
+
+  function gainCoin() {
+    const gained = coinsPerClick();
+    coins += gained;
+    fairStats.coins += 1;
+    saveFairStats();
+    coinCountEl.textContent = String(coins);
+    saveHighScore();
+    updateOddsUI();
+    promptEl.textContent = "FAIR DRAW → COIN · +" + gained;
+    coinFlash.classList.remove("active");
+    void coinFlash.offsetWidth;
+    coinFlash.classList.add("active");
+    if (audio()) audio().coin();
+    saveActiveRun();
+
+    buttonMat.emissiveIntensity = 3.6;
+    buttonTopMat.emissiveIntensity = 4.0;
+    setTimeout(function () {
+      if (alive && inGame) {
+        buttonMat.emissiveIntensity = 2.4;
+        buttonTopMat.emissiveIntensity = 2.8;
+        promptEl.textContent = oddsPromptText();
+      }
+    }, 900);
+  }
+
+  function die(silent, fromAscend) {
+    alive = false;
+    stopAutoClicker();
+    if (!silent) {
+      fairStats.deaths += 1;
+      saveFairStats();
+    }
+    saveHighScore();
+    if (deathPulsesEl) deathPulsesEl.textContent = String(pulses);
+    deathCoinsEl.textContent = String(coins);
+    document.body.classList.add("is-dead");
+    document.body.style.cursor = "default";
+    if (fromAscend) {
+      if (deathCodeEl) deathCodeEl.textContent = "ERR_ASCENDED";
+      if (deathTitleEl) deathTitleEl.textContent = "ASCENDED";
+      if (deathSubEl) {
+        deathSubEl.textContent =
+          "The hook took you. Base coins / click is now " +
+          formatEffMult(1 + ascendCoinBonus) +
+          " forever.";
+      }
+      promptEl.textContent =
+        "ASCENDED · BASE " + formatEffMult(1 + ascendCoinBonus);
+    } else {
+      if (deathCodeEl) deathCodeEl.textContent = "ERR_SIGNAL_LOST";
+      if (deathTitleEl) deathTitleEl.textContent = "YOU DIED";
+      if (deathSubEl) {
+        deathSubEl.textContent = "The factory kept running without you.";
+      }
+      promptEl.textContent = "FAIR DRAW → DEATH";
+    }
+    deathOverlay.hidden = false;
+    buttonMat.emissiveIntensity = 0.2;
+    buttonTopMat.emissiveIntensity = 0.2;
+    buttonGlow.intensity = 0.5;
+    buttonFill.intensity = 0.15;
+    overhead.intensity = 0.15;
+    updateOddsUI();
+    if (!silent && audio()) audio().death();
+    syncNewRunBtn();
+    syncMainMenuBtn();
+    saveActiveRun();
+  }
+
+  function performPress(fromAuto) {
+    if (!inGame || !alive || pressing || resolving || ascending) return;
+    if (!fromAuto && !hitButton()) return;
+
+    resolving = true;
+    // Pulses scale with click power (strength + ascension), same as coin payout
+    pulses += coinsPerClick();
+    pulseCountEl.textContent = String(pulses);
+    saveHighScore();
+    pressVisual(true, !fromAuto);
+    promptEl.textContent = fromAuto ? "AUTO ROLLING…" : "ROLLING…";
+
+    const gotCoin = rollGotCoin();
+    const resolveMs = fromAuto
+      ? Math.max(8, Math.floor(1000 / Math.max(1, autoClickRate()) * 0.7))
+      : 160;
+
+    setTimeout(function () {
+      pressVisual(false, !fromAuto);
+      if (!alive) {
+        resolving = false;
+        return;
+      }
+      if (gotCoin) gainCoin();
+      else die();
+      resolving = false;
+      saveActiveRun();
+    }, resolveMs);
+  }
+
+  function onPress() {
+    performPress(false);
+  }
+
+  function enterGame() {
+    if (inGame || entering) return;
+    if (!ensureNamedOrGate()) return;
+    entering = true;
+    currentServerId = null;
+    closeServersPanel();
+    closeLeaderboard();
+    if (audio()) {
+      audio().unlock();
+      audio().enterFactory();
+    }
+
+    document.body.classList.remove("is-title", "is-resuming");
+    document.body.classList.add("is-entering");
+    titleScreen.classList.add("is-gone");
+    enterWipe.classList.remove("active");
+    void enterWipe.offsetWidth;
+    enterWipe.classList.add("active");
+
+    coins = 0;
+    pulses = 0;
+    alive = true;
+    deathChance = BASE_DEATH_CHANCE;
+    nextUpgradeCost = BASE_UPGRADE_COST;
+    upgradeLevel = 0;
+    buttonStrength = 0;
+    strengthCoinBonus = 0;
+    nextStrengthCost = BASE_STRENGTH_COST;
+    autoClicksPerSec = 0;
+    nextAutoCost = BASE_AUTO_COST;
+    effectiveness = 0;
+    nextEffectivenessCost = BASE_EFFECTIVENESS_COST;
+    buyQty = 1;
+    stopAutoClicker();
+    setBuyQty(1);
+    shopOpen = false;
+    shopWidthPct = 34;
+    // Keep leftover fair-bag draws across runs so a death is followed by a owed coin
+    if (shopBuyMsg) {
+      shopBuyMsg.textContent = "";
+      shopBuyMsg.classList.remove("is-ok");
+    }
+    coinCountEl.textContent = "0";
+    pulseCountEl.textContent = "0";
+    bestCountEl.textContent = String(highScore);
+    if (autoCountEl) autoCountEl.textContent = "0/s";
+    buttonAppear = 0;
+    buttonShiftX = 0;
+    buttonShiftTarget = 0;
+    buttonGroup.visible = true;
+    buttonGroup.position.x = 0;
+    buttonGroup.scale.set(0.01, 0.01, 0.01);
+    buttonGlow.intensity = 0;
+    buttonFill.intensity = 0;
+    rim.intensity = 0;
+    pressVisual(false);
+    buttonMat.emissiveIntensity = 2.4;
+    buttonTopMat.emissiveIntensity = 2.8;
+    overhead.intensity = 0.55;
+    updateOddsUI();
+
+    renderer.render(scene, camera);
+
+    setTimeout(function () {
+      document.body.classList.remove("is-entering");
+      document.body.classList.add("is-playing");
+      inGame = true;
+      entering = false;
+      openShop(true);
+      hudStats.hidden = false;
+      promptEl.hidden = false;
+      promptEl.textContent = oddsPromptText();
+      document.body.style.cursor = "crosshair";
+      syncNewRunBtn();
+      syncMainMenuBtn();
+      saveActiveRun();
+    }, 500);
+  }
+
+  function resumeActiveRun(data) {
+    if (data.serverId) currentServerId = data.serverId;
+    coins = data.coins | 0;
+    pulses = data.pulses | 0;
+    alive = data.alive !== false;
+    deathChance =
+      typeof data.deathChance === "number" && data.deathChance > 0
+        ? data.deathChance
+        : BASE_DEATH_CHANCE;
+    nextUpgradeCost =
+      typeof data.nextUpgradeCost === "number"
+        ? data.nextUpgradeCost
+        : BASE_UPGRADE_COST;
+    upgradeLevel = data.upgradeLevel | 0;
+    buttonStrength = data.buttonStrength | 0;
+    if (typeof data.strengthCoinBonus === "number") {
+      strengthCoinBonus = data.strengthCoinBonus;
+    } else {
+      strengthCoinBonus = buttonStrength * 2;
+    }
+    nextStrengthCost =
+      typeof data.nextStrengthCost === "number"
+        ? data.nextStrengthCost
+        : BASE_STRENGTH_COST;
+    autoClicksPerSec = Number(data.autoClicksPerSec) || 0;
+    nextAutoCost =
+      typeof data.nextAutoCost === "number" ? data.nextAutoCost : BASE_AUTO_COST;
+    effectiveness = data.effectiveness | 0;
+    nextEffectivenessCost =
+      typeof data.nextEffectivenessCost === "number"
+        ? data.nextEffectivenessCost
+        : BASE_EFFECTIVENESS_COST * Math.pow(1.5, effectiveness);
+    buyQty = [1, 10, 100, 1000].indexOf(data.buyQty) >= 0 ? data.buyQty : 1;
+    shopOpen = true;
+    shopWidthPct =
+      typeof data.shopWidthPct === "number" ? data.shopWidthPct : 34;
+    rollBag = Array.isArray(data.rollBag) ? data.rollBag.slice() : [];
+
+    document.body.classList.remove("is-title", "is-entering", "is-resuming");
+    document.body.classList.add("is-playing");
+    titleScreen.classList.add("is-gone");
+    deathOverlay.hidden = true;
+    document.body.classList.remove("is-dead");
+
+    inGame = true;
+    entering = false;
+    pressing = false;
+    resolving = false;
+    buttonAppear = 1;
+
+    buttonGroup.visible = true;
+    buttonGroup.scale.set(1, 1, 1);
+    applyShopLayout();
+    buttonShiftX = buttonShiftTarget;
+    buttonGroup.position.x = buttonShiftX;
+
+    buttonGlow.intensity = 5.2;
+    buttonFill.intensity = 1.6;
+    rim.intensity = 2.4;
+    pressVisual(false);
+    buttonMat.emissiveIntensity = 2.4;
+    buttonTopMat.emissiveIntensity = 2.8;
+    overhead.intensity = alive ? 0.55 : 0.15;
+
+    coinCountEl.textContent = String(coins);
+    pulseCountEl.textContent = String(pulses);
+    bestCountEl.textContent = String(highScore);
+    if (autoCountEl) autoCountEl.textContent = autoClickRate() + "/s";
+    hudStats.hidden = false;
+    promptEl.hidden = false;
+    promptEl.textContent = oddsPromptText();
+    document.body.style.cursor = alive ? "crosshair" : "default";
+
+    if (shopBuyMsg) {
+      shopBuyMsg.textContent = data.shopMsg || "";
+      shopBuyMsg.classList.toggle("is-ok", !!data.shopMsgOk);
+    }
+
+    setBuyQty(buyQty);
+    updateOddsUI();
+    resize();
+    renderer.render(scene, camera);
+
+    if (audio()) {
+      audio().unlock();
+      audio().enterFactory();
+    }
+
+    if (!alive) die(true);
+    else syncAutoClicker();
+
+    syncNewRunBtn();
+    syncMainMenuBtn();
+    saveActiveRun();
+  }
+
+  function returnToTitle(fromMainMenu) {
+    const endedServerId = currentServerId;
+    inGame = false;
+    entering = false;
+    alive = true;
+    pressing = false;
+    resolving = false;
+    shopOpen = false;
+    deathChance = BASE_DEATH_CHANCE;
+    nextUpgradeCost = BASE_UPGRADE_COST;
+    upgradeLevel = 0;
+    buttonStrength = 0;
+    strengthCoinBonus = 0;
+    nextStrengthCost = BASE_STRENGTH_COST;
+    autoClicksPerSec = 0;
+    nextAutoCost = BASE_AUTO_COST;
+    effectiveness = 0;
+    nextEffectivenessCost = BASE_EFFECTIVENESS_COST;
+    buyQty = 1;
+    stopAutoClicker();
+    buttonAppear = 0;
+    buttonShiftX = 0;
+    buttonShiftTarget = 0;
+    buttonGroup.visible = false;
+    buttonGroup.position.x = 0;
+    buttonGroup.scale.set(0.01, 0.01, 0.01);
+    buttonGlow.intensity = 0;
+    buttonFill.intensity = 0;
+    rim.intensity = 0;
+    applyShopLayout();
+    clearActiveRun();
+
+    // Death / new-run ends the saved server; main menu keeps it
+    if (!fromMainMenu && endedServerId) {
+      removeServer(endedServerId);
+    }
+    currentServerId = null;
+
+    ascending = false;
+    if (hookOverlay) {
+      hookOverlay.hidden = true;
+      hookOverlay.classList.remove("is-active");
+    }
+    document.body.classList.remove(
+      "is-dead",
+      "is-playing",
+      "is-entering",
+      "is-resuming",
+      "is-hooked"
+    );
+    document.body.classList.add("is-title");
+    document.body.style.cursor = "pointer";
+    deathOverlay.hidden = true;
+    hudStats.hidden = true;
+    promptEl.hidden = true;
+    titleScreen.classList.remove("is-gone");
+    highScoreEl.textContent = String(highScore);
+    updateAscendLine();
+    syncNewRunBtn();
+    syncMainMenuBtn();
+    closeServersPanel();
+    if (enterHint) enterHint.textContent = "SAVED RUNS APPEAR UNDER SERVERS";
+    if (audio()) audio().returnTitle();
+  }
+
+  function goToMainMenu() {
+    if (!inGame || ascending) return;
+    stopAutoClicker();
+    if (alive) {
+      upsertServerFromCurrentRun();
+    } else if (currentServerId) {
+      removeServer(currentServerId);
+    }
+    clearActiveRun();
+    returnToTitle(true);
+  }
+
+  function tryEnterFromTitle(event) {
+    if (!document.body.classList.contains("is-title")) return;
+    if (serversPanel && !serversPanel.hidden) return;
+    if (event) event.preventDefault();
+    enterGame();
+  }
+
+  const muteBtn = document.getElementById("mute-btn");
+  const newRunBtn = document.getElementById("new-run-btn");
+
+  function syncNewRunBtn() {
+    if (!newRunBtn) return;
+    newRunBtn.hidden = !(inGame && alive && !ascending);
+  }
+
+  function syncMainMenuBtn() {
+    if (!mainMenuBtn) return;
+    mainMenuBtn.hidden = !(inGame && alive && !ascending);
+  }
+
+  function syncMuteBtn() {
+    if (!muteBtn || !audio()) return;
+    const isMuted = audio().isMuted();
+    muteBtn.textContent = isMuted ? "SOUND OFF" : "SOUND ON";
+    muteBtn.classList.toggle("is-muted", isMuted);
+  }
+  if (muteBtn) {
+    muteBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      event.preventDefault();
+      if (!audio()) return;
+      audio().unlock();
+      audio().toggleMute();
+      if (!audio().isMuted() && document.body.classList.contains("is-title")) {
+        audio().startTitle();
+      }
+      syncMuteBtn();
+    });
+  }
+  if (newRunBtn) {
+    newRunBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      event.preventDefault();
+      if (!inGame || !alive || ascending) return;
+      stopAutoClicker();
+      die(false, false);
+      syncNewRunBtn();
+      syncMainMenuBtn();
+    });
+  }
+
+  if (mainMenuBtn) {
+    mainMenuBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      event.preventDefault();
+      goToMainMenu();
+    });
+  }
+
+  if (enterGameBtn) {
+    enterGameBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      tryEnterFromTitle(event);
+    });
+  }
+
+  if (serversBtn) {
+    serversBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      event.preventDefault();
+      if (!ensureNamedOrGate()) return;
+      closeLeaderboard();
+      openServersPanel();
+    });
+  }
+
+  if (serversClose) {
+    serversClose.addEventListener("click", function (event) {
+      event.stopPropagation();
+      closeServersPanel();
+    });
+  }
+
+  if (serversPanel) {
+    serversPanel.addEventListener("click", function (event) {
+      event.stopPropagation();
+      if (event.target === serversPanel) closeServersPanel();
+    });
+  }
+
+  if (leaderboardBtn) {
+    leaderboardBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      event.preventDefault();
+      openLeaderboard();
+    });
+  }
+
+  if (leaderboardClose) {
+    leaderboardClose.addEventListener("click", function (event) {
+      event.stopPropagation();
+      closeLeaderboard();
+    });
+  }
+
+  if (leaderboardPanel) {
+    leaderboardPanel.addEventListener("click", function (event) {
+      event.stopPropagation();
+      if (event.target === leaderboardPanel) closeLeaderboard();
+    });
+  }
+
+  if (changeNameBtn) {
+    changeNameBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      openNameGate(true);
+    });
+  }
+
+  if (nameConfirmBtn) {
+    nameConfirmBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      confirmPlayerName();
+    });
+  }
+
+  if (nameInput) {
+    nameInput.addEventListener("keydown", function (event) {
+      if (event.code === "Enter") {
+        event.preventDefault();
+        confirmPlayerName();
+      }
+    });
+  }
+
+  if (nameGate) {
+    nameGate.addEventListener("click", function (event) {
+      event.stopPropagation();
+    });
+  }
+
+  // Soft title drone after first gesture anywhere
+  function armTitleAudio() {
+    if (!audio()) return;
+    audio().unlock();
+    if (document.body.classList.contains("is-title")) audio().startTitle();
+  }
+  window.addEventListener("pointerdown", armTitleAudio, { once: true });
+  window.addEventListener("keydown", armTitleAudio, { once: true });
+
+  titleScreen.addEventListener("keydown", function (event) {
+    if (event.code === "Space" || event.code === "Enter") {
+      event.preventDefault();
+      if (serversPanel && !serversPanel.hidden) return;
+      tryEnterFromTitle(event);
+    }
+  });
+
+  canvas.addEventListener("pointermove", function (event) {
+    if (!inGame || !alive) return;
+    setPointerFromEvent(event);
+    document.body.style.cursor = hitButton() ? "pointer" : "crosshair";
+  });
+
+  canvas.addEventListener("pointerdown", function (event) {
+    if (!inGame) return;
+    setPointerFromEvent(event);
+    onPress();
+  });
+
+  window.addEventListener("keydown", function (event) {
+    if (event.code !== "Space" && event.code !== "Enter") return;
+    if (nameGate && !nameGate.hidden) return;
+    event.preventDefault();
+    if (!inGame) {
+      if (serversPanel && !serversPanel.hidden) return;
+      if (leaderboardPanel && !leaderboardPanel.hidden) return;
+      enterGame();
+      return;
+    }
+    if (!alive) return;
+    pointer.x = 0;
+    pointer.y = 0.05;
+    onPress();
+  });
+
+  retryBtn.addEventListener("click", function (event) {
+    event.stopPropagation();
+    returnToTitle(false);
+  });
+
+  shopBuyBtn.addEventListener("click", function (event) {
+    event.stopPropagation();
+    buyHigherOdds();
+  });
+
+  if (shopStrengthBtn) {
+    shopStrengthBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      buyButtonStrength();
+    });
+  }
+
+  if (shopAutoBtn) {
+    shopAutoBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      buyAutoClicker();
+    });
+  }
+
+  if (shopEffectivenessBtn) {
+    shopEffectivenessBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      buyEffectiveness();
+    });
+  }
+
+  if (shopAscendBtn) {
+    shopAscendBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      buyAscend();
+    });
+  }
+
+  if (buyQtyBar) {
+    buyQtyBar.addEventListener("click", function (event) {
+      const btn = event.target.closest(".buy-qty-btn");
+      if (!btn) return;
+      event.stopPropagation();
+      setBuyQty(Number(btn.dataset.qty) || 1);
+    });
+  }
+
+  shopPanel.addEventListener("pointerdown", function (event) {
+    event.stopPropagation();
+  });
+
+  function onSplitPointerDown(event) {
+    if (!shopOpen) return;
+    resizingSplit = true;
+    splitHandle.setPointerCapture(event.pointerId);
+    document.body.style.cursor = window.matchMedia("(max-width: 720px)").matches
+      ? "row-resize"
+      : "col-resize";
+    event.preventDefault();
+  }
+
+  function onSplitPointerMove(event) {
+    if (!resizingSplit || !shopOpen) return;
+    const rect = document.getElementById("stage").getBoundingClientRect();
+    const vertical = window.matchMedia("(max-width: 720px)").matches;
+    let pct;
+    if (vertical) {
+      pct = ((rect.bottom - event.clientY) / rect.height) * 100;
+    } else {
+      pct = ((rect.right - event.clientX) / rect.width) * 100;
+    }
+    shopWidthPct = Math.min(72, Math.max(18, pct));
+    document.documentElement.style.setProperty(
+      "--shop-width",
+      shopWidthPct + "%"
+    );
+    resize();
+  }
+
+  function onSplitPointerUp(event) {
+    if (!resizingSplit) return;
+    resizingSplit = false;
+    try {
+      splitHandle.releasePointerCapture(event.pointerId);
+    } catch (err) {
+      /* ignore */
+    }
+    document.body.style.cursor = inGame ? "crosshair" : "pointer";
+    saveActiveRun();
+  }
+
+  splitHandle.addEventListener("pointerdown", onSplitPointerDown);
+  splitHandle.addEventListener("pointermove", onSplitPointerMove);
+  splitHandle.addEventListener("pointerup", onSplitPointerUp);
+  splitHandle.addEventListener("pointercancel", onSplitPointerUp);
+
+  const clock = new THREE.Clock();
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+    const t = clock.elapsedTime;
+
+    // Slide button left when the digital menu opens
+    buttonShiftX += (buttonShiftTarget - buttonShiftX) * Math.min(1, dt * 4.5);
+    buttonGroup.position.x = buttonShiftX;
+
+    if ((inGame || entering) && buttonAppear < 1) {
+      buttonAppear = Math.min(1, buttonAppear + dt * 1.35);
+      const eased = 1 - Math.pow(1 - buttonAppear, 3);
+      buttonGroup.scale.setScalar(0.01 + eased * 0.99);
+      buttonGlow.intensity = 5.2 * eased;
+      buttonFill.intensity = 1.6 * eased;
+      rim.intensity = 2.4 * eased;
+    }
+
+    if (inGame && alive) {
+      const pulse = 2.2 + Math.sin(t * 2.4) * 0.35;
+      buttonMat.emissiveIntensity = pressing ? 3.5 : pulse;
+      buttonTopMat.emissiveIntensity = pressing ? 4.0 : pulse + 0.4;
+      if (buttonAppear >= 1) {
+        buttonGlow.intensity = pressing ? 7.5 : 4.8 + Math.sin(t * 2.4) * 0.9;
+        buttonFill.intensity = pressing ? 2.8 : 1.4 + Math.sin(t * 2.4) * 0.35;
+      }
+      glowDisc.material.opacity = 0.34 + Math.sin(t * 2.4) * 0.1;
+      halo.material.opacity = 0.45 + Math.sin(t * 2.4) * 0.12;
+      overhead.intensity =
+        0.4 + Math.sin(t * 7.3) * 0.06 + (Math.random() > 0.97 ? 0.15 : 0);
+
+      camera.position.x = buttonShiftX * 0.35 + Math.sin(t * 0.35) * 0.025;
+      camera.position.y = 1.28 + Math.sin(t * 0.5) * 0.012;
+      camera.lookAt(buttonShiftX, 0.7, 0);
+    }
+
+    const pos = motes.geometry.attributes.position;
+    for (let i = 0; i < moteCount; i++) {
+      let y = pos.getY(i) + 0.004;
+      if (y > 5) y = 0.2;
+      pos.setY(i, y);
+    }
+    pos.needsUpdate = true;
+
+    if (inGame || entering || document.body.classList.contains("is-playing")) {
+      renderer.render(scene, camera);
+    } else {
+      renderer.setClearColor(0x050807, 1);
+      renderer.clear();
+    }
+  }
+
+  animate();
+  window.__enterTheButton = enterGame;
+
+  window.addEventListener("pagehide", saveActiveRun);
+  window.addEventListener("beforeunload", saveActiveRun);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") saveActiveRun();
+  });
+
+  const pendingRun = readActiveRun();
+  if (pendingRun) {
+    resumeActiveRun(pendingRun);
+  } else {
+    document.body.classList.remove("is-resuming");
+  }
+})();
+
+  </script>
   <script>
     (function () {
-      // Prefer CDN on GitHub Pages; local vendor is a fallback for offline / file://
-      var sources = [
-        "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js",
-        "https://unpkg.com/three@0.160.0/build/three.min.js",
-        "https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js",
-        "vendor/three.min.js",
-      ];
-      var i = 0;
-
-      function fail() {
+      if (typeof THREE === "undefined") {
         var hint = document.getElementById("enter-hint");
-        if (hint) hint.textContent = "FAILED TO LOAD 3D ENGINE — REFRESH";
+        if (hint) hint.textContent = "FAILED TO LOAD 3D ENGINE — CHECK NETWORK";
         document.body.classList.remove("is-resuming", "is-playing", "is-entering");
         document.body.classList.add("is-title");
-        var title = document.getElementById("title-screen");
-        if (title) title.classList.remove("is-gone");
       }
-
-      function loadMain() {
-        var main = document.createElement("script");
-        main.src = "main.js";
-        main.onerror = fail;
-        document.body.appendChild(main);
-      }
-
-      function tryNext() {
-        if (typeof THREE !== "undefined") {
-          loadMain();
-          return;
-        }
-        if (i >= sources.length) {
-          fail();
-          return;
-        }
-        var s = document.createElement("script");
-        s.src = sources[i++];
-        s.onload = function () {
-          if (typeof THREE !== "undefined") loadMain();
-          else tryNext();
-        };
-        s.onerror = tryNext;
-        document.body.appendChild(s);
-      }
-
-      tryNext();
     })();
   </script>
 </body>
