@@ -8119,13 +8119,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     syncVendorShopBtn();
   }
 
-  function maybeUnlockMechanicShop() {
-    if (robotShopUnlocked) return false;
-    if (!(Number(coins) >= ROBOT_VENDOR_COIN_GOAL)) return false;
-    markRobotShopUnlocked();
-    return true;
-  }
-
   function openRobotVendorFromButton() {
     if (
       !robotShopUnlocked ||
@@ -8140,7 +8133,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       return;
     }
 
-    robotVendorOfferedThisRun = true;
     robotVendorActive = true;
     stopAutoClicker();
     resolving = false;
@@ -8148,10 +8140,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     document.body.classList.add("is-robot-vendor");
     document.body.style.cursor = "default";
     if (robotOverlay) robotOverlay.hidden = false;
+    // Already unlocked — skip intro lines, open shop directly
     openRobotShop();
     if (promptEl) {
       promptEl.hidden = false;
-      promptEl.textContent = "MECHANIC ONLINE";
+      promptEl.textContent = "MECHANIC SHOP";
     }
     if (audio()) audio().upgrade();
     syncNewRunBtn();
@@ -8198,6 +8191,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   }
 
   function beginRobotVendorOffer() {
+    // First unlock only — after that use the MECHANIC button, no cutscene
+    if (robotShopUnlocked) return false;
     if (
       !inGame ||
       !alive ||
@@ -8246,7 +8241,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   }
 
   function maybeTriggerRobotVendor() {
-    maybeUnlockMechanicShop();
+    if (!(Number(coins) >= ROBOT_VENDOR_COIN_GOAL)) return false;
+    // Already unlocked + seen once: keep playing, open shop via MECHANIC button
+    if (robotShopUnlocked) {
+      syncVendorShopBtn();
+      return false;
+    }
     return beginRobotVendorOffer();
   }
 
