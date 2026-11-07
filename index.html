@@ -259,10 +259,16 @@ body.is-resuming .title-screen {
 
 .shop-odds-value {
   font-family: var(--font-display);
-  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-size: 0.72rem;
   font-weight: 700;
   color: var(--blood-glow);
-  text-shadow: 0 0 18px rgba(255, 40, 40, 0.45);
+  text-shadow: 0 0 12px rgba(255, 40, 40, 0.4);
+  line-height: 1.15;
+  white-space: pre-line;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  max-height: 6.2rem;
+  overflow: hidden;
 }
 
 .shop-odds-coin {
@@ -1371,17 +1377,17 @@ body.is-team-yard .return-box-btn:not([hidden]) {
 }
 
 .stat-value--odds {
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  line-height: 1.05;
+  font-size: 0.58rem;
+  letter-spacing: 0.01em;
+  line-height: 1.08;
   white-space: pre-line;
-  max-width: min(42vw, 11.5rem);
+  max-width: min(48vw, 13.5rem);
   text-align: right;
 }
 
 .shop-odds-value {
-  font-size: 0.85rem;
-  line-height: 1.1;
+  font-size: 0.68rem;
+  line-height: 1.12;
   white-space: pre-line;
   max-width: 100%;
 }
@@ -5064,7 +5070,83 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       strength: Math.max(0, Number(src.strength) | 0),
       auto: Math.max(0, Number(src.auto) | 0),
       effectiveness: Math.max(0, Number(src.effectiveness) | 0),
+      alive: src.alive !== false,
     };
+  }
+
+  function aliveTeamNoobCount() {
+    let n = 0;
+    for (let i = 0; i < teamNoobs.length; i++) {
+      if (teamNoobs[i] && teamNoobs[i].alive !== false) n += 1;
+    }
+    return n;
+  }
+
+  function reviveAllTeamNoobs() {
+    teamNoobs.forEach(function (n) {
+      if (n) n.alive = true;
+    });
+    teamNoobActors.forEach(function (actor) {
+      if (!actor) return;
+      actor.visible = true;
+      if (actor.userData.deskButton) actor.userData.deskButton.visible = true;
+      actor.rotation.x = 0;
+      actor.position.y = 0;
+    });
+  }
+
+  function killOneTeamNoob() {
+    const living = [];
+    for (let i = 0; i < teamNoobs.length; i++) {
+      if (teamNoobs[i] && teamNoobs[i].alive !== false) living.push(teamNoobs[i]);
+    }
+    if (!living.length) return null;
+    const victim = living[Math.floor(Math.random() * living.length)];
+    victim.alive = false;
+    const actor = teamNoobActors.find(function (a) {
+      return a && a.userData.noobId === victim.id;
+    });
+    if (actor) {
+      actor.visible = true;
+      actor.rotation.x = Math.PI / 2;
+      actor.position.y = 0.15;
+      if (actor.userData.deskButton) actor.userData.deskButton.visible = false;
+    }
+    saveTeamLeader();
+    return victim;
+  }
+
+  function applyTeamLeaderDeathRoll() {
+    // Team leader: recruits take death hits first (same odds as you)
+    if (!(teamLeaderUnlocked && teamMode === "control")) {
+      die();
+      return "player";
+    }
+    const left = aliveTeamNoobCount();
+    if (left > 0) {
+      const victim = killOneTeamNoob();
+      const remain = aliveTeamNoobCount();
+      showTeamToast(
+        (victim ? victim.name : "RECRUIT") +
+          " DOWN · " +
+          remain +
+          " LEFT"
+      );
+      if (promptEl) {
+        promptEl.textContent =
+          "RECRUIT LOST · " + remain + " STILL STANDING";
+      }
+      if (audio()) audio().buttonRelease();
+      syncAutoClicker();
+      saveActiveRun();
+      return "minion";
+    }
+    die();
+    if (deathSubEl) {
+      deathSubEl.textContent =
+        "Every recruit fell. The box has no one left to press for you.";
+    }
+    return "player";
   }
 
   function createDefaultTeamNoobs() {
@@ -5162,6 +5244,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     const permaAuto = 1 + equippedPermanentLevel("auto") * 0.25;
     let total = 0;
     teamNoobs.forEach(function (n) {
+      if (!n || n.alive === false) return;
       const eff = Math.pow(1.15, n.effectiveness | 0) * permaEff;
       const oddsMult = Math.pow(1.08, n.odds | 0) * permaOdds;
       const strength = (1 + (n.strength | 0)) * permaStr;
@@ -5301,7 +5384,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const effectivenessTotal = bulkCost(nextEffectivenessCost, buyQty);
       addRow(
         "HIGHER ODDS",
-        formatPct(deathChance).replace(/\n/g, "").slice(0, 28) + " death",
+        formatPctShort(deathChance) + " death",
         "BUY x" + buyQty + " · " + formatCoins(oddsTotal),
         !canAfford(oddsTotal),
         function () {
@@ -5426,6 +5509,28 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     return false;
   }
 
+  function aimAsVector2() {
+    const a = aimPointer();
+    _aimVec2.set(a.x, a.y);
+    return _aimVec2;
+  }
+
+  function uvFromBoardPoint(kind, worldPoint) {
+    const board = stationBoards[kind];
+    if (!board || !board.mesh || !worldPoint) return null;
+    board.mesh.updateMatrixWorld(true);
+    _boardLocal.copy(worldPoint);
+    board.mesh.worldToLocal(_boardLocal);
+    // Screen plane is 1.85 x 2.2
+    const u = _boardLocal.x / 1.85 + 0.5;
+    const v = _boardLocal.y / 2.2 + 0.5;
+    if (u < -0.05 || u > 1.05 || v < -0.05 || v > 1.05) return null;
+    return {
+      x: Math.max(0, Math.min(1, u)),
+      y: Math.max(0, Math.min(1, v)),
+    };
+  }
+
   function getAimedStationBoardHit() {
     if (teamMode !== "control") return null;
     const meshes = [];
@@ -5436,26 +5541,44 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (board.mesh) meshes.push(board.mesh);
     });
     if (!meshes.length) return null;
-    raycaster.setFromCamera(aimPointer(), camera);
-    const hits = raycaster.intersectObjects(meshes, false);
+    if (teamWorld) teamWorld.updateMatrixWorld(true);
+    raycaster.setFromCamera(aimAsVector2(), camera);
+    const hits = raycaster.intersectObjects(meshes, true);
     if (!hits.length) return null;
     const kind = hits[0].object.userData.stationKind;
     if (!kind) return null;
-    return { kind: kind, uv: hits[0].uv || null };
+    let uv = hits[0].uv || null;
+    if (!uv) uv = uvFromBoardPoint(kind, hits[0].point);
+    // Prefer UV from the painted screen if the box was hit first
+    if (!uv || hits[0].object !== stationBoards[kind].mesh) {
+      const screenHits = raycaster.intersectObject(stationBoards[kind].mesh, false);
+      if (screenHits.length && screenHits[0].uv) uv = screenHits[0].uv;
+      else if (!uv) uv = uvFromBoardPoint(kind, hits[0].point);
+    }
+    return { kind: kind, uv: uv, distance: hits[0].distance };
   }
 
   function tryUseAimedStationBoard() {
     if (teamMode !== "control") return false;
-    // Repaint first so BUY enabled/disabled matches current coins
     refreshStationBoards();
     const aimed = getAimedStationBoardHit();
     if (!aimed) return false;
-    if (aimed.uv) {
-      if (tryActivateStationBoardHit(aimed.kind, aimed.uv)) return true;
+    // If the room button is clearly closer, let the button win
+    const btnDist = distanceToMainButton();
+    if (btnDist != null && aimed.distance != null && btnDist < aimed.distance - 0.15) {
+      return false;
     }
-    // UV miss / between rows — still acknowledge the board hitbox
+    if (aimed.uv && tryActivateStationBoardHit(aimed.kind, aimed.uv)) return true;
     showTeamToast("AIM AT A BUY ROW");
     return true;
+  }
+
+  function distanceToMainButton() {
+    if (!buttonGroup.visible) return null;
+    buttonGroup.updateMatrixWorld(true);
+    raycaster.setFromCamera(aimAsVector2(), camera);
+    const hits = raycaster.intersectObjects(interactables, true);
+    return hits.length ? hits[0].distance : null;
   }
   let fpsActive = false;
   let fpsYaw = 0;
@@ -5926,27 +6049,26 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       (el.parentElement && el.parentElement.clientWidth) || 180
     );
 
-    // Odds: keep readable size through up to 5 rows, shrink only after that
+    // Odds: slightly smaller base so more digits fit; shrink only if still overflowing
     if (isOdds) {
-      let size = 0.78;
+      let size = 0.58;
       el.style.fontSize = size + "rem";
       const textLines = Math.max(1, value.split("\n").length);
       let guard = 0;
-      while (guard < 40 && size > 0.3) {
-        const lineH = Math.max(10, size * 15.5);
+      while (guard < 40 && size > 0.28) {
+        const lineH = Math.max(8, size * 14.5);
         const allowedRows = Math.max(5, textLines);
         const overWidth = el.scrollWidth > maxW + 4;
         const overRows = el.scrollHeight > allowedRows * lineH + 6;
-        // Prefer rows: do not shrink for height while content still fits in <=5 rows
         if (textLines <= 5 && !overWidth) break;
         if (textLines <= 5 && overWidth) {
-          size -= 0.03;
+          size -= 0.025;
           el.style.fontSize = size + "rem";
           guard += 1;
           continue;
         }
         if (!overWidth && !overRows) break;
-        size -= 0.03;
+        size -= 0.025;
         el.style.fontSize = size + "rem";
         guard += 1;
       }
@@ -6440,8 +6562,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   function formatCoins(n) {
     if (!Number.isFinite(n)) return "∞";
-    // Named large powers (short scale). Prefer one-decimal (0.1) readability.
+    // Named large powers (short scale). Prefer one-decimal readability.
     const tiers = [
+      [1e63, " VIGINTILLION"],
+      [1e60, " NOVEMDECILLION"],
+      [1e57, " OCTODECILLION"],
+      [1e54, " SEPTENDECILLION"],
+      [1e51, " SEXDECILLION"],
+      [1e48, " QUINDECILLION"],
+      [1e45, " QUATTUORDECILLION"],
+      [1e42, " TREDECILLION"],
+      [1e39, " DUODECILLION"],
+      [1e36, " UNDECILLION"],
       [1e33, " DECILLION"],
       [1e30, " NONILLION"],
       [1e27, " OCTILLION"],
@@ -6453,6 +6585,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     for (let i = 0; i < tiers.length; i++) {
       if (n >= tiers[i][0]) {
         const v = n / tiers[i][0];
+        if (v >= 1e6) {
+          return v.toExponential(3).replace(/\.?0+e/, "e") + tiers[i][1];
+        }
         if (v >= 100) return Math.round(v) + tiers[i][1];
         return v.toFixed(1).replace(/\.0$/, "") + tiers[i][1];
       }
@@ -6603,7 +6738,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       "FACTORY · " +
       (run.pulses | 0) +
       "P / " +
-      formatCoins(run.coins | 0) +
+      formatCoins(Number(run.coins) || 0) +
       "C"
     );
   }
@@ -6803,8 +6938,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     return v;
   }
 
-  const ODDS_ROW_LEN = 20;
+  // Smaller type → longer rows → more digits before compact form
+  const ODDS_ROW_LEN = 26;
   const ODDS_MAX_ROWS = 5;
+  const ODDS_PLAIN_ZERO_CAP = 52;
 
   function wrapPctRows(text, rowLen) {
     rowLen = rowLen || ODDS_ROW_LEN;
@@ -6818,10 +6955,21 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     return out;
   }
 
+  function tinyMantissaDigits(x, maxDigs) {
+    maxDigs = maxDigs || 12;
+    const log10 = Math.log10(x);
+    if (!Number.isFinite(log10)) return "1";
+    const exp = Math.floor(log10);
+    const mant = x / Math.pow(10, exp);
+    let core = mant.toFixed(Math.min(10, maxDigs)).replace(/0+$/, "").replace(/\.$/, "");
+    if (!core) core = "1";
+    return core.replace(".", "").slice(0, maxDigs);
+  }
+
   function formatTinyPlain(x) {
-    // Plain decimal expansion (no scientific), for ultra-small percents
+    // Plain decimals while small enough; compact form when zeros would explode the UI
     if (!(x > 0) || !Number.isFinite(x)) {
-      return "0." + "0".repeat(40) + "3";
+      return "0.(∞ 0s)1";
     }
     if (x >= 1) {
       return x >= 100
@@ -6829,21 +6977,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         : String(Math.round(x * 1000) / 1000).replace(/\.0+$/, "");
     }
     const log10 = Math.log10(x);
-    if (!Number.isFinite(log10)) {
-      return "0." + "0".repeat(40) + "3";
-    }
+    if (!Number.isFinite(log10)) return "0.(∞ 0s)1";
     const exp = Math.floor(log10);
-    const mant = x / Math.pow(10, exp); // [1, 10)
     const leadingZeros = Math.max(0, -exp - 1);
-    let mantCore = mant.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-    if (!mantCore) mantCore = "1";
-    const digits = mantCore.replace(".", "");
-    // Fit in 5 HUD rows before any size shrink (leave room for '%' and ellipsis)
+    const digits = tinyMantissaDigits(x, 14);
+
+    // Extreme: never dump hundreds of zeros (that is what bugs the shop/HUD)
+    if (leadingZeros > ODDS_PLAIN_ZERO_CAP) {
+      return "0.(" + leadingZeros + " 0s)" + digits;
+    }
+
     const maxBody = ODDS_ROW_LEN * ODDS_MAX_ROWS - 1;
     const full = "0." + "0".repeat(leadingZeros) + digits;
     if (full.length <= maxBody) return full;
-    const head = Math.max(8, Math.floor(maxBody * 0.55));
-    const tail = Math.max(4, maxBody - head - 1);
+    // Prefer keeping more trailing significant digits in leftover space
+    const head = Math.max(10, Math.floor(maxBody * 0.42));
+    const tail = Math.max(8, maxBody - head - 1);
     return full.slice(0, head) + "…" + full.slice(-tail);
   }
 
@@ -6862,7 +7011,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           .replace(/\.$/, "") + "%"
       );
     }
-    // Tiny odds: up to 5 plain-decimal rows (never 0%, never scientific)
+    if (pct >= 0.01) {
+      return pct.toFixed(4).replace(/0+$/, "").replace(/\.$/, "") + "%";
+    }
     return wrapPctRows(formatTinyPlain(pct) + "%", ODDS_ROW_LEN);
   }
 
@@ -6884,8 +7035,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if (pct >= 0.0001) {
       return pct.toFixed(6).replace(/0+$/, "").replace(/\.$/, "") + "%";
     }
-    const zeros = Math.max(0, Math.floor(-Math.log10(pct)) - 1);
-    return "0.(" + zeros + " 0s)%";
+    const log10 = Math.log10(pct);
+    if (!Number.isFinite(log10)) return "0.(∞ 0s)1%";
+    const zeros = Math.max(0, Math.floor(-log10) - 1);
+    const digs = tinyMantissaDigits(pct, 10);
+    return "0.(" + zeros + " 0s)" + digs + "%";
   }
 
   function oddsPromptText() {
@@ -6899,7 +7053,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   function updateOddsUI() {
     const deathText = formatPct(deathChance);
-    const coinText = formatPct(1 - deathChance);
+    const coinChanceVal = Math.max(0, 1 - clampDeathChance(deathChance));
     const oddsTotal = bulkCost(nextUpgradeCost, buyQty);
     const strengthTotal = bulkCost(nextStrengthCost, buyQty);
     const autoTotal = bulkCost(nextAutoCost, buyQty);
@@ -6917,24 +7071,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
     setOddsDisplay(deathText);
     if (shopDeathOddsEl) {
-      shopDeathOddsEl.textContent = deathText;
-      shopDeathOddsEl.style.wordBreak = "break-all";
-      shopDeathOddsEl.style.overflowWrap = "anywhere";
-      shopDeathOddsEl.style.whiteSpace = "pre-line";
-      shopDeathOddsEl.style.lineHeight = "1.08";
-      const flat = deathText.replace(/\n/g, "").length;
-      let shopSize = 1.15;
-      if (flat > 18) shopSize = 0.85;
-      if (flat > 32) shopSize = 0.65;
-      if (flat > 48) shopSize = 0.5;
-      if (flat > 72) shopSize = 0.4;
-      if (flat > 100) shopSize = 0.32;
-      shopDeathOddsEl.style.fontSize = shopSize + "rem";
+      // Shop uses the same multi-row text but always fit-sized (no giant clamp flash)
+      fitNumberEl(shopDeathOddsEl, deathText, { odds: true });
+      shopDeathOddsEl.style.color = "var(--blood-glow)";
     }
     if (shopCoinOddsEl) {
+      const coinShort =
+        coinChanceVal >= 0.999999999
+          ? "~100%"
+          : formatPctShort(coinChanceVal);
       shopCoinOddsEl.textContent =
         "COIN CHANCE " +
-        coinText +
+        coinShort +
         " · +" +
         formatEffMult(coinsPerClick()) +
         " / CLICK (BASE " +
@@ -6956,9 +7104,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         "x" +
         buyQty +
         " · " +
-        formatPct(deathChance) +
+        formatPctShort(deathChance) +
         " → " +
-        formatPct(afterOddsDeath) +
+        formatPctShort(afterOddsDeath) +
         " DEATH · ÷" +
         formatEffMult(oddsDivisorPerBuy()) +
         " · COST " +
@@ -7257,7 +7405,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
     if (shopBuyMsg) {
       shopBuyMsg.textContent =
-        "UPGRADED x" + qty + " · DEATH NOW " + formatPct(deathChance).replace(/\n/g, "");
+        "UPGRADED x" + qty + " · DEATH NOW " + formatPctShort(deathChance);
       shopBuyMsg.classList.add("is-ok");
     }
     if (promptEl) promptEl.textContent = "ODDS UPGRADED · " + oddsPromptText();
@@ -8055,26 +8203,36 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   );
   scene.add(motes);
 
-  // Click volume covers the full visible red button (top + body)
+  // Large invisible click volume — must stay raycastable (material.visible true)
+  const buttonHitMat = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    colorWrite: false,
+    side: THREE.DoubleSide,
+  });
   const buttonHit = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.62, 0.62, 0.55, 32),
-    new THREE.MeshBasicMaterial({
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-    })
+    new THREE.CylinderGeometry(1.35, 1.35, 1.35, 24),
+    buttonHitMat
   );
-  buttonHit.position.y = 1.22;
+  buttonHit.position.y = 1.15;
   buttonHit.name = "THE_BUTTON";
   buttonHit.userData.isMainButton = true;
   buttonGroup.add(buttonHit);
 
   const raycaster = new THREE.Raycaster();
-  raycaster.far = 40;
+  raycaster.far = 80;
   const pointer = new THREE.Vector2();
-  const interactables = [buttonHit, buttonMesh, buttonTop];
+  const _aimVec2 = new THREE.Vector2();
+  const interactables = [buttonHit, buttonMesh, buttonTop, buttonLip].filter(
+    Boolean
+  );
+  if (typeof buttonPressRoot !== "undefined" && buttonPressRoot) {
+    interactables.push(buttonPressRoot);
+  }
   const _btnWorld = new THREE.Vector3();
   const _btnNdc = new THREE.Vector3();
+  const _boardLocal = new THREE.Vector3();
 
   function clearHackerTypeTimer() {
     if (hackerTypeTimer) {
@@ -8297,7 +8455,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     opts = opts || {};
     palette = palette || {};
     const group = new THREE.Group();
-    // Classic noob. Arms = ONLY topArm + bottomArm. Nothing else articulates.
+    // Classic connected noob. Arms = ONLY topArm + bottomArm.
     const yellow = new THREE.MeshStandardMaterial({
       color: palette.skin || 0xffcc33,
       roughness: 0.55,
@@ -8321,45 +8479,44 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       return m;
     }
 
-    const torso = box(0.55, 0.7, 0.3, blue);
-    torso.position.y = 1.15;
+    // Legs sit on the ground (y=0) and meet the torso
+    [-1, 1].forEach(function (sign) {
+      const leg = box(0.24, 0.72, 0.26, green);
+      leg.position.set(sign * 0.15, 0.36, 0);
+      group.add(leg);
+    });
+
+    const torso = box(0.58, 0.72, 0.32, blue);
+    torso.position.y = 1.08; // bottom ~0.72 (touches legs)
     torso.name = opts.escape ? "noobTorso" : "torso";
     group.add(torso);
 
-    const head = box(0.48, 0.48, 0.48, yellow);
-    head.position.y = 1.78;
+    const head = box(0.5, 0.5, 0.5, yellow);
+    head.position.y = 1.69; // bottom ~1.44 (touches torso top)
     head.name = opts.escape ? "noobHead" : "head";
     group.add(head);
     const smile = box(0.2, 0.035, 0.04, black);
-    smile.position.set(0, -0.08, 0.25);
+    smile.position.set(0, -0.08, 0.26);
     head.add(smile);
     [-0.1, 0.1].forEach(function (x) {
       const eye = box(0.07, 0.07, 0.04, black);
-      eye.position.set(x, 0.06, 0.25);
+      eye.position.set(x, 0.06, 0.26);
       head.add(eye);
-    });
-
-    // Static legs — no joints
-    [-1, 1].forEach(function (sign) {
-      const leg = box(0.22, 0.7, 0.24, green);
-      leg.position.set(sign * 0.14, 0.35, 0);
-      group.add(leg);
     });
 
     function makeArm(side) {
       const sign = side === "left" ? -1 : 1;
-      // 1) top arm
+      // Shoulder flush on torso side
       const topArm = new THREE.Group();
-      topArm.position.set(sign * 0.36, 1.4, 0.1);
+      topArm.position.set(sign * 0.39, 1.32, 0.06);
       group.add(topArm);
-      const topMesh = box(0.2, 0.32, 0.2, yellow);
-      topMesh.position.y = -0.14;
+      const topMesh = box(0.2, 0.34, 0.2, yellow);
+      topMesh.position.y = -0.15;
       topArm.add(topMesh);
-      // 2) bottom arm
       const bottomArm = new THREE.Group();
-      bottomArm.position.y = -0.3;
+      bottomArm.position.y = -0.32;
       topArm.add(bottomArm);
-      const bottomMesh = box(0.18, 0.4, 0.18, yellow);
+      const bottomMesh = box(0.18, 0.38, 0.18, yellow);
       bottomMesh.position.y = -0.16;
       bottomArm.add(bottomMesh);
       return { topArm: topArm, bottomArm: bottomArm };
@@ -8379,7 +8536,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       leftBottomArm: left.bottomArm,
       rightTopArm: right.topArm,
       rightBottomArm: right.bottomArm,
-      // aliases used by older walk code
       leftArmChain: { root: left.topArm, shoulder: left.topArm, elbow: left.bottomArm },
       rightArmChain: { root: right.topArm, shoulder: right.topArm, elbow: right.bottomArm },
     };
@@ -8525,37 +8681,37 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   }
 
   function makeNoobDeskButton() {
-    // Short pedestal — pad sits at hand height right in front of the noob
+    // Stem from the floor up to hand height — no floating pad
     const g = new THREE.Group();
     const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.26, 0.3, 0.08, 20),
+      new THREE.CylinderGeometry(0.28, 0.32, 0.1, 20),
       new THREE.MeshStandardMaterial({
         color: 0x1c2228,
         metalness: 0.78,
         roughness: 0.32,
       })
     );
-    base.position.y = 0.04;
+    base.position.y = 0.05;
     g.add(base);
     const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.09, 0.16, 12),
+      new THREE.CylinderGeometry(0.08, 0.1, 0.9, 12),
       new THREE.MeshStandardMaterial({
         color: 0x2a3038,
         metalness: 0.8,
         roughness: 0.3,
       })
     );
-    stem.position.y = 0.14;
+    stem.position.y = 0.55;
     g.add(stem);
     const housing = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.18, 0.2, 0.1, 20),
+      new THREE.CylinderGeometry(0.18, 0.2, 0.12, 20),
       new THREE.MeshStandardMaterial({
         color: 0x333b44,
         metalness: 0.7,
         roughness: 0.35,
       })
     );
-    housing.position.y = 0.24;
+    housing.position.y = 1.05;
     g.add(housing);
     const pad = new THREE.Mesh(
       new THREE.CylinderGeometry(0.14, 0.15, 0.08, 24),
@@ -8567,7 +8723,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         roughness: 0.24,
       })
     );
-    pad.position.y = 0.32;
+    pad.position.y = 1.14;
     pad.name = "noobPad";
     g.add(pad);
     const ring = new THREE.Mesh(
@@ -8579,7 +8735,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       })
     );
     ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.29;
+    ring.position.y = 1.1;
     g.add(ring);
     g.userData.teamRole = "noobButton";
     g.traverse(function (c) {
@@ -8887,18 +9043,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       boardRim.rotation.x = -0.52;
       root.add(boardRim);
 
-      // Invisible click volume slightly in front of the painted screen
-      const hit = new THREE.Mesh(
-        new THREE.PlaneGeometry(2.05, 2.4),
-        new THREE.MeshBasicMaterial({
-          transparent: true,
-          opacity: 0,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        })
-      );
-      hit.position.set(def.x, 1.62, def.z + 0.5);
-      hit.rotation.x = -0.52;
+      // Thick invisible box in front of the board — easy to aim/click
+      const hitMat = new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        colorWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const hit = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.6, 1.1), hitMat);
+      hit.position.set(def.x, 1.55, def.z + 0.95);
       hit.userData.teamRole = "station";
       hit.userData.stationKind = def.kind;
       hit.userData.isStationBoard = true;
@@ -8945,11 +9099,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       root.add(noob);
 
       const deskBtn = makeNoobDeskButton();
-      // Pad at ~y 1.05, just in front of the torso so both hands rest on it
-      deskBtn.position.set(x, 0.78, z + 0.5);
+      // Grounded at y=0; pad reaches hand height in front of the noob
+      deskBtn.position.set(x, 0, z + 0.48);
       root.add(deskBtn);
       noob.userData.deskButton = deskBtn;
       noob.userData.pressPhase = Math.random();
+      noob.visible = data.alive !== false;
+      deskBtn.visible = data.alive !== false;
       teamNoobActors.push(noob);
     });
 
@@ -9763,8 +9919,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   }
 
   function aimPointer() {
-    // In look mode, aim is always screen center (crosshair)
-    if (lookMode && teamMode === "control" && !activeStationKind) {
+    // Control room: always aim with crosshair center while looking / locked
+    if (teamMode === "control" && (lookMode || fpsPointerLocked)) {
       return { x: 0, y: 0 };
     }
     return pointer;
@@ -9772,8 +9928,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   function hitTeamObject() {
     if (!teamInteractables.length) return null;
-    const aim = aimPointer();
-    raycaster.setFromCamera(aim, camera);
+    if (teamWorld) teamWorld.updateMatrixWorld(true);
+    raycaster.setFromCamera(aimAsVector2(), camera);
     const hits = raycaster.intersectObjects(teamInteractables, true);
     if (!hits.length) return null;
     // Prefer exact board screens, then noobs (ignore noobButton)
@@ -9796,9 +9952,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if (!inGame || !alive) return false;
     if (teamMode !== "control" && teamMode !== "yard") return false;
     setPointerFromEvent(event);
-    // Boards first — their hit volumes must not lose to the main button
-    if (teamMode === "control" && tryUseAimedStationBoard()) return true;
-    if (teamMode === "control" && hitButton()) return false;
+    // Closest interactable wins: room button vs boards
+    if (teamMode === "control") {
+      const board = getAimedStationBoardHit();
+      const btnDist = distanceToMainButton();
+      const boardCloser =
+        board &&
+        (btnDist == null ||
+          (board.distance != null && board.distance <= btnDist + 0.05));
+      if (boardCloser) {
+        if (tryUseAimedStationBoard()) return true;
+      }
+      if (hitButton()) return false; // let canvas handler call onPress
+    }
     const obj = hitTeamObject();
     if (!obj) return false;
     const role = obj.userData.teamRole;
@@ -9815,7 +9981,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       return true;
     }
     if (role === "station" && teamMode === "control") {
-      // Already tried above; keep toast if somehow only role matched
+      if (tryUseAimedStationBoard()) return true;
       showTeamToast("AIM AT A BUY ROW ON THE BOARD");
       return true;
     }
@@ -10264,22 +10430,32 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   function hitButton() {
     if (!inGame || !alive) return false;
     if (!buttonGroup.visible || buttonAppear < 0.9) return false;
-    // Station signs own the click when the crosshair is on them
-    if (teamMode === "control" && getAimedStationBoardHit()) return false;
     buttonGroup.updateMatrixWorld(true);
-    const aim = aimPointer();
+    const aim = aimAsVector2();
     raycaster.setFromCamera(aim, camera);
-    if (raycaster.intersectObjects(interactables, true).length > 0) {
+    const btnHits = raycaster.intersectObjects(interactables, true);
+    if (btnHits.length > 0) {
+      // Only yield to a board if that board is closer than the button
+      if (teamMode === "control") {
+        const board = getAimedStationBoardHit();
+        if (
+          board &&
+          board.distance != null &&
+          board.distance + 0.2 < btnHits[0].distance
+        ) {
+          return false;
+        }
+      }
       return true;
     }
-    // Screen-space fallback: if crosshair is on/near the visible button, count it
-    _btnWorld.set(0, 1.22, 0);
+    // Screen-space fallback — generous in the box so the pad is easy to mash
+    _btnWorld.set(0, 1.2, 0);
     buttonGroup.localToWorld(_btnWorld);
     _btnNdc.copy(_btnWorld).project(camera);
     if (_btnNdc.z > 1 || _btnNdc.z < -1) return false;
     const dx = _btnNdc.x - aim.x;
     const dy = _btnNdc.y - aim.y;
-    const limit = teamMode === "control" ? 0.12 : 0.12;
+    const limit = teamMode === "control" ? 0.28 : 0.14;
     return dx * dx + dy * dy <= limit * limit;
   }
 
@@ -10354,7 +10530,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     }
     saveHighScore();
     if (deathPulsesEl) deathPulsesEl.textContent = String(pulses);
-    deathCoinsEl.textContent = String(coins);
+    deathCoinsEl.textContent = formatCoins(coins);
     document.body.classList.add("is-dead");
     document.body.style.cursor = "default";
     if (fromAscend) {
@@ -10408,28 +10584,28 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
     // Already sitting on 1M+ coins → cutscene before another roll
     if (Number(coins) >= HACKER_COIN_GOAL && !hackerResolvedThisRun) {
-      maybeTriggerHacker();
-      return;
+      if (maybeTriggerHacker()) return;
     }
 
-    // Already in power-tier coins → robot vendor offer
+    // First power-tier offer only — never block presses after unlock
     if (
       Number(coins) >= ROBOT_VENDOR_COIN_GOAL &&
       !robotVendorOfferedThisRun
     ) {
-      maybeTriggerRobotVendor();
-      return;
+      if (maybeTriggerRobotVendor()) return;
+      robotVendorOfferedThisRun = true;
     }
 
     resolving = true;
     // Pulses scale with click power (strength + ascension), same as coin payout
     pulses += coinsPerClick();
-    pulseCountEl.textContent = String(pulses);
+    if (pulseCountEl) fitNumberEl(pulseCountEl, String(pulses));
     saveHighScore();
     pressVisual(true, !fromAuto);
 
     promptEl.textContent = fromAuto ? "AUTO ROLLING…" : "ROLLING…";
 
+    // Same upgraded death odds for leader + each recruit
     const gotCoin = rollGotCoin();
     const resolveMs = fromAuto
       ? Math.max(8, Math.floor(1000 / Math.max(1, autoClickRate()) * 0.7))
@@ -10442,7 +10618,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         return;
       }
       if (gotCoin) gainCoin();
-      else die();
+      else applyTeamLeaderDeathRoll();
       resolving = false;
       saveActiveRun();
     }, resolveMs);
@@ -10559,8 +10735,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   function resumeActiveRun(data) {
     if (data.serverId) currentServerId = data.serverId;
-    coins = data.coins | 0;
-    pulses = data.pulses | 0;
+    // Never use |0 — it truncates huge coin/pulse values to 32-bit
+    coins = Number(data.coins);
+    if (!Number.isFinite(coins) || coins < 0) coins = 0;
+    pulses = Number(data.pulses);
+    if (!Number.isFinite(pulses) || pulses < 0) pulses = 0;
     alive = data.alive !== false;
     deathChance = clampDeathChance(
       typeof data.deathChance === "number" && data.deathChance > 0
@@ -11934,12 +12113,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         /* ignore */
       }
     }
-    // Boards / recruits first, then room button
-    if (onTeamPointer(event)) return;
+    // Room button and boards (closest wins inside onTeamPointer / hitButton)
     if (teamMode === "control" && hitButton()) {
       onPress();
       return;
     }
+    if (onTeamPointer(event)) return;
     if (teamMode === "control") return;
     onPress();
   });
@@ -12375,19 +12554,23 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     }
 
     if (teamMode === "control" && teamNoobActors.length) {
-      // Multi-joint mash — speed scales with auto clicker
+      // 2-joint mash — speed scales with auto clicker
       const autoR = Math.max(0.25, autoClickRate());
       const mashHz = Math.min(16, 1.25 + Math.log10(1 + autoR) * 3.0);
       teamNoobActors.forEach(function (child, i) {
         const parts = child.userData.parts;
         if (!parts) return;
+        const noobData = teamNoobs.find(function (n) {
+          return n && n.id === child.userData.noobId;
+        });
+        // Fallen recruits stay down — no mash
+        if (noobData && noobData.alive === false) return;
+
         const phase = (t * mashHz + i * 0.41) % 1;
-        // Smooth attack / release curve
         let press = phase < 0.45 ? phase / 0.45 : 1 - (phase - 0.45) / 0.55;
         press = press * press * (3 - 2 * press);
         const idle = Math.sin(t * 2.1 + i) * 0.03;
 
-        // Exactly 2 moving parts per arm: topArm + bottomArm
         function driveArm(top, bottom, sign) {
           if (!top || !bottom) return;
           top.rotation.x = -0.95 - press * 0.28 + idle;
@@ -12404,7 +12587,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (desk) {
           const pad = desk.getObjectByName("noobPad");
           if (pad) {
-            pad.position.y = 0.32 - press * 0.045;
+            pad.position.y = 1.14 - press * 0.05;
             if (pad.material && pad.material.emissiveIntensity != null) {
               pad.material.emissiveIntensity = 1.2 + press * 1.8;
             }
