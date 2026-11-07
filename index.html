@@ -5171,19 +5171,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     return total;
   }
 
-  function mostBoughtPermanentKey() {
-    let bestKey = "odds";
-    let bestLvl = -1;
-    Object.keys(PERMA_LABELS).forEach(function (key) {
-      const lvl = permanentLevel(key);
-      if (lvl > bestLvl) {
-        bestLvl = lvl;
-        bestKey = key;
-      }
-    });
-    return bestKey;
-  }
-
   let permaFarmMode = false;
   let activeStationKind = null;
   let lastStationKind = "button";
@@ -10037,43 +10024,27 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   function openPermaPick() {
     if (hackerOverlay) hackerOverlay.hidden = true;
     if (hackerActions) hackerActions.hidden = true;
-    // Cutscene helper: auto-pick most bought permanent, then leave in 0.5s
-    const key = mostBoughtPermanentKey();
     if (permaPick && permaPickGrid) {
       permaPickGrid.querySelectorAll(".perma-pick-btn").forEach(function (btn) {
         const k = btn.getAttribute("data-perma");
         const lvl = permanentLevel(k);
-        btn.disabled = true;
-        btn.textContent =
-          (PERMA_LABELS[k] || k) +
-          " · ×" +
-          lvl +
-          (k === key ? " · SELECTED" : "");
+        btn.disabled = false;
+        btn.textContent = (PERMA_LABELS[k] || k) + " · ×" + lvl;
       });
       const kicker = permaPick.querySelector(".perma-pick-kicker");
       const title = permaPick.querySelector(".perma-pick-title");
       const sub = permaPick.querySelector(".perma-pick-sub");
       if (kicker) kicker.textContent = "ESCAPE PROTOCOL";
-      if (title) title.textContent = "AUTO · MOST BOUGHT UPLINK";
+      if (title) title.textContent = "CHOOSE A PERMANENT UPLINK";
       if (sub) {
         sub.textContent =
-          "Selecting " +
-          (PERMA_LABELS[key] || key) +
-          " (your highest rank). Leaving in 0.5s…";
+          "Gain +1 permanent rank of that upgrade. You start every run owning it for free, and shop prices stay on the base ladder (your old #2 buy becomes the new #1 price).";
       }
       permaPick.hidden = false;
     }
     if (promptEl) {
-      promptEl.textContent =
-        "AUTO PERMA · " + (PERMA_LABELS[key] || key) + " · 0.5s";
+      promptEl.textContent = "CHOOSE A PERMANENT UPLINK";
     }
-    setTimeout(function () {
-      grantPermanent(key);
-      if (permaPick) permaPick.hidden = true;
-      hackerActive = false;
-      hackerResolvedThisRun = true;
-      startEscapeCutscene();
-    }, 500);
   }
 
   function chooseLeavePath() {
