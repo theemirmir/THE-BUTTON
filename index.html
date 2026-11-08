@@ -1490,9 +1490,11 @@ body.is-team-yard .return-box-btn:not([hidden]) {
 .death-overlay {
   position: absolute;
   inset: 0;
-  z-index: 50;
+  z-index: 90;
   display: grid;
   place-items: center;
+  pointer-events: auto;
+  cursor: default;
   background:
     radial-gradient(circle at center, rgba(80, 0, 0, 0.55), rgba(0, 0, 0, 0.94)),
     repeating-linear-gradient(
@@ -10826,13 +10828,30 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   function die(silent, fromAscend) {
     alive = false;
     stopAutoClicker();
+    // Unlock look / menus so the death / spawn overlay is clickable
+    try {
+      closeStationSlab({ silent: true });
+    } catch (err) {
+      /* ignore */
+    }
+    try {
+      closeLevelPanel();
+    } catch (err) {
+      /* ignore */
+    }
+    try {
+      closeTeamMemberPanel();
+    } catch (err) {
+      /* ignore */
+    }
+    disableFpsLook();
     if (!silent) {
       fairStats.deaths += 1;
       saveFairStats();
     }
     saveHighScore();
     if (deathPulsesEl) deathPulsesEl.textContent = formatCoins(pulses);
-    deathCoinsEl.textContent = formatCoins(coins);
+    if (deathCoinsEl) deathCoinsEl.textContent = formatCoins(coins);
     document.body.classList.add("is-dead");
     document.body.style.cursor = "default";
     if (fromAscend) {
@@ -10844,18 +10863,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           formatEffMult(Mag.from(1).add(ascendCoinBonus)) +
           " forever.";
       }
-      promptEl.textContent =
-        "ASCENDED · BASE " +
-        formatEffMult(Mag.from(1).add(ascendCoinBonus));
+      if (promptEl) {
+        promptEl.textContent =
+          "ASCENDED · BASE " +
+          formatEffMult(Mag.from(1).add(ascendCoinBonus));
+      }
     } else {
       if (deathCodeEl) deathCodeEl.textContent = "ERR_SIGNAL_LOST";
       if (deathTitleEl) deathTitleEl.textContent = "YOU DIED";
       if (deathSubEl) {
         deathSubEl.textContent = "The factory kept running without you.";
       }
-      promptEl.textContent = "FAIR DRAW → DEATH";
+      if (promptEl) promptEl.textContent = "FAIR DRAW → DEATH";
     }
-    deathOverlay.hidden = false;
+    if (deathOverlay) deathOverlay.hidden = false;
     buttonMat.emissiveIntensity = 0.2;
     buttonTopMat.emissiveIntensity = 0.2;
     buttonGlow.intensity = 0.5;
@@ -11188,13 +11209,24 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       teamBlackout.classList.remove("is-on");
     }
     closeTeamMemberPanel();
+    closeLevelPanel();
+    disableFpsLook();
     disposeTeamWorld();
     teamMode = "off";
+    setTeamBodyClass();
+    if (crosshairEl) crosshairEl.hidden = true;
     if (escapeOverlay) {
       escapeOverlay.classList.remove("is-on");
       escapeOverlay.hidden = true;
     }
-    document.body.classList.remove("is-escaping");
+    document.body.classList.remove(
+      "is-escaping",
+      "is-hacker",
+      "is-robot-vendor",
+      "is-team-intro",
+      "is-team-control",
+      "is-team-yard"
+    );
     shopOpen = false;
     deathChance = BASE_DEATH_CHANCE;
     nextUpgradeCost = Mag.from(BASE_UPGRADE_COST);
@@ -12111,20 +12143,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     newRunBtn.addEventListener("click", function (event) {
       event.stopPropagation();
       event.preventDefault();
-      if (!inGame || !alive || ascending || hackerActive || escaping) return;
-      stopAutoClicker();
-      // In the box / permanent farm: soft reset coins, stay in place
       if (
-        permaFarmMode ||
-        (teamLeaderUnlocked &&
-          (teamMode === "control" || teamMode === "yard"))
-      ) {
-        resetTeamBoxRun();
+        !inGame ||
+        !alive ||
+        ascending ||
+        hackerActive ||
+        escaping ||
+        robotVendorActive
+      )
         return;
-      }
+      stopAutoClicker();
+      // NEW RUN = kill you and show the death / spawn overlay
       die(false, false);
-      syncNewRunBtn();
-      syncMainMenuBtn();
     });
   }
   if (returnBoxBtn) {
