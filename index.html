@@ -4655,9 +4655,201 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   const ROBOT_SHOP_UNLOCK_KEY = "the-button-robot-shop-unlocked";
   const TEAM_LEADER_KEY = "the-button-team-leader";
   const HACKER_COIN_GOAL = 1000000;
+  // Permanent Farm board: each buy grants this many ranks
+  const PERMA_FARM_BUY_RANKS = 2;
   // Robot black-market shop unlocks at 1 octillion coins
   const ROBOT_VENDOR_COIN_GOAL = 1e27;
   const CUTSCENE_SKIPPER_COST = 1e27; // 1 octillion, never increases
+  // 10^googol — hard cap for registered magnitudes
+  const GOOGOL = 1e100;
+  const GOOGOLPLEX_EXP = GOOGOL;
+
+  /**
+   * Scientific big-num: value = m × 10^e (m in [1,10) or 0).
+   * Covers every magnitude up to a googolplex (10^(10^100)).
+   */
+  function Mag(m, e) {
+    this.m = Number(m) || 0;
+    this.e = Number(e) || 0;
+    this._norm();
+  }
+  Mag.ZERO = new Mag(0, 0);
+  Mag.zero = function () {
+    return new Mag(0, 0);
+  };
+  Mag.from = function (v) {
+    if (v instanceof Mag) return new Mag(v.m, v.e);
+    if (v && typeof v === "object" && v.m != null && v.e != null) {
+      return new Mag(v.m, v.e);
+    }
+    if (typeof v === "string") {
+      const s = String(v).trim();
+      if (!s) return Mag.zero();
+      try {
+        if (s.charAt(0) === "{" || s.charAt(0) === "[") {
+          return Mag.from(JSON.parse(s));
+        }
+      } catch (err) {
+        /* fall through */
+      }
+      const sci = /^([0-9]*\.?[0-9]+)e([+-]?[0-9]+)$/i.exec(s);
+      if (sci) return new Mag(Number(sci[1]), Number(sci[2]));
+      v = Number(s);
+    }
+    const n = Number(v);
+    if (!Number.isFinite(n) || n === 0) {
+      if (n === Infinity) return new Mag(1, GOOGOLPLEX_EXP);
+      return Mag.zero();
+    }
+    const abs = Math.abs(n);
+    const e = Math.floor(Math.log10(abs));
+    const m = abs / Math.pow(10, e);
+    return new Mag(m, e);
+  };
+  Mag.prototype._norm = function () {
+    if (!Number.isFinite(this.m) || this.m === 0) {
+      this.m = 0;
+      this.e = 0;
+      return this;
+    }
+    if (!Number.isFinite(this.e)) {
+      this.m = 1;
+      this.e = GOOGOLPLEX_EXP;
+      return this;
+    }
+    const logAdj = Math.floor(Math.log10(Math.abs(this.m)));
+    if (Number.isFinite(logAdj) && logAdj !== 0) {
+      this.m /= Math.pow(10, logAdj);
+      this.e += logAdj;
+    }
+    if (this.e >= GOOGOLPLEX_EXP) {
+      this.m = Math.min(Math.max(this.m, 1), 9.999);
+      this.e = GOOGOLPLEX_EXP;
+    }
+    if (this.e < -324) {
+      this.m = 0;
+      this.e = 0;
+    }
+    return this;
+  };
+  Mag.prototype.clone = function () {
+    return new Mag(this.m, this.e);
+  };
+  Mag.prototype.isZero = function () {
+    return this.m === 0;
+  };
+  Mag.prototype.toNumber = function () {
+    if (this.m === 0) return 0;
+    if (this.e >= 309) return Infinity;
+    return this.m * Math.pow(10, this.e);
+  };
+  Mag.prototype.valueOf = function () {
+    return this.toNumber();
+  };
+  Mag.prototype.toJSON = function () {
+    if (this.m === 0) return 0;
+    if (this.e < 15) return this.toNumber();
+    return { m: this.m, e: this.e };
+  };
+  Mag.prototype.toString = function () {
+    if (this.m === 0) return "0";
+    if (this.e < 15) {
+      const n = this.toNumber();
+      if (Number.isInteger(n)) return String(n);
+      return String(n);
+    }
+    return (
+      this.m.toFixed(12).replace(/\.?0+$/, "") +
+      "e" +
+      Math.round(this.e)
+    );
+  };
+  Mag.prototype.cmp = function (o) {
+    o = Mag.from(o);
+    if (this.m === 0 && o.m === 0) return 0;
+    if (this.m === 0) return -1;
+    if (o.m === 0) return 1;
+    if (this.e !== o.e) return this.e > o.e ? 1 : -1;
+    if (this.m === o.m) return 0;
+    return this.m > o.m ? 1 : -1;
+  };
+  Mag.prototype.gte = function (o) {
+    return this.cmp(o) >= 0;
+  };
+  Mag.prototype.gt = function (o) {
+    return this.cmp(o) > 0;
+  };
+  Mag.prototype.lt = function (o) {
+    return this.cmp(o) < 0;
+  };
+  Mag.prototype.lte = function (o) {
+    return this.cmp(o) <= 0;
+  };
+  Mag.prototype.add = function (o) {
+    o = Mag.from(o);
+    if (this.m === 0) return o.clone();
+    if (o.m === 0) return this.clone();
+    let m1 = this.m;
+    let e1 = this.e;
+    let m2 = o.m;
+    let e2 = o.e;
+    if (e1 > e2) {
+      if (e1 - e2 > 15) return this.clone();
+      m2 *= Math.pow(10, e2 - e1);
+      return new Mag(m1 + m2, e1);
+    }
+    if (e2 > e1) {
+      if (e2 - e1 > 15) return o.clone();
+      m1 *= Math.pow(10, e1 - e2);
+      return new Mag(m1 + m2, e2);
+    }
+    return new Mag(m1 + m2, e1);
+  };
+  Mag.prototype.sub = function (o) {
+    o = Mag.from(o);
+    if (o.m === 0) return this.clone();
+    if (this.lt(o)) return Mag.zero();
+    if (this.e > o.e && this.e - o.e > 15) return this.clone();
+    let m1 = this.m;
+    let e1 = this.e;
+    let m2 = o.m;
+    const e2 = o.e;
+    if (e1 > e2) m2 *= Math.pow(10, e2 - e1);
+    else if (e2 > e1) {
+      m1 *= Math.pow(10, e1 - e2);
+      e1 = e2;
+    }
+    return new Mag(Math.max(0, m1 - m2), e1);
+  };
+  Mag.prototype.mul = function (o) {
+    o = Mag.from(o);
+    if (this.m === 0 || o.m === 0) return Mag.zero();
+    return new Mag(this.m * o.m, this.e + o.e);
+  };
+  Mag.prototype.div = function (o) {
+    o = Mag.from(o);
+    if (this.m === 0) return Mag.zero();
+    if (o.m === 0) return new Mag(1, GOOGOLPLEX_EXP);
+    return new Mag(this.m / o.m, this.e - o.e);
+  };
+  Mag.prototype.pow = function (n) {
+    n = Number(n) || 0;
+    if (this.m === 0) return n === 0 ? Mag.from(1) : Mag.zero();
+    if (n === 0) return Mag.from(1);
+    const log10 = n * (Math.log10(this.m) + this.e);
+    if (!Number.isFinite(log10) || log10 >= GOOGOLPLEX_EXP) {
+      return new Mag(1, GOOGOLPLEX_EXP);
+    }
+    const e = Math.floor(log10);
+    const m = Math.pow(10, log10 - e);
+    return new Mag(m, e);
+  };
+  Mag.prototype.max = function (o) {
+    return this.gte(o) ? this.clone() : Mag.from(o);
+  };
+  Mag.prototype.min = function (o) {
+    return this.lte(o) ? this.clone() : Mag.from(o);
+  };
   const TEAM_ASCEND_GOAL = 100;
   const TEAM_STAT_KEYS = ["odds", "strength", "auto", "effectiveness"];
   const TEAM_STAT_LABELS = {
@@ -4850,10 +5042,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   const BASE_ASCEND_COST = 200;
   const BASE_DEATH_CHANCE = 0.1;
 
-  let coins = 0;
-  let pulses = 0;
-  let highScore = Number(localStorage.getItem(HIGH_SCORE_KEY) || 0);
-  if (!Number.isFinite(highScore)) highScore = 0;
+  let coins = Mag.zero();
+  let pulses = Mag.zero();
+  let highScore = Mag.from(localStorage.getItem(HIGH_SCORE_KEY) || 0);
   let alive = true;
   let pressing = false;
   let resolving = false;
@@ -4862,15 +5053,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   let buttonAppear = 0;
   let shopOpen = false;
   let deathChance = BASE_DEATH_CHANCE;
-  let nextUpgradeCost = BASE_UPGRADE_COST;
+  let nextUpgradeCost = Mag.from(BASE_UPGRADE_COST);
   let upgradeLevel = 0;
   let buttonStrength = 0;
-  let strengthCoinBonus = 0;
-  let nextStrengthCost = BASE_STRENGTH_COST;
-  let autoClicksPerSec = 0;
-  let nextAutoCost = BASE_AUTO_COST;
+  let strengthCoinBonus = Mag.zero();
+  let nextStrengthCost = Mag.from(BASE_STRENGTH_COST);
+  let autoClicksPerSec = Mag.zero();
+  let nextAutoCost = Mag.from(BASE_AUTO_COST);
   let effectiveness = 0;
-  let nextEffectivenessCost = BASE_EFFECTIVENESS_COST;
+  let nextEffectivenessCost = Mag.from(BASE_EFFECTIVENESS_COST);
   let buyQty = 1;
   let autoTimer = null;
   let shopWidthPct = 34;
@@ -4883,25 +5074,26 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   let playerName = (localStorage.getItem(PLAYER_NAME_KEY) || "").trim();
 
   let ascendLevel = 0;
-  let ascendCoinBonus = 0;
-  let nextAscendCost = BASE_ASCEND_COST;
+  let ascendCoinBonus = Mag.zero();
+  let nextAscendCost = Mag.from(BASE_ASCEND_COST);
   try {
     const savedAscend = JSON.parse(localStorage.getItem(ASCEND_KEY) || "{}");
     if (Number.isFinite(savedAscend.level)) ascendLevel = savedAscend.level | 0;
-    if (Number.isFinite(savedAscend.bonus)) {
-      ascendCoinBonus = Number(savedAscend.bonus);
+    if (savedAscend.bonus != null) {
+      ascendCoinBonus = Mag.from(savedAscend.bonus);
     } else {
-      ascendCoinBonus = ascendLevel;
+      ascendCoinBonus = Mag.from(ascendLevel);
     }
-    if (Number.isFinite(savedAscend.cost) && savedAscend.cost > 0) {
-      nextAscendCost = savedAscend.cost;
+    if (savedAscend.cost != null) {
+      nextAscendCost = Mag.from(savedAscend.cost);
+      if (nextAscendCost.isZero()) nextAscendCost = Mag.from(BASE_ASCEND_COST);
     } else {
-      nextAscendCost = BASE_ASCEND_COST * Math.pow(2, ascendLevel);
+      nextAscendCost = Mag.from(BASE_ASCEND_COST).mul(Mag.from(2).pow(ascendLevel));
     }
   } catch (err) {
     ascendLevel = 0;
-    ascendCoinBonus = 0;
-    nextAscendCost = BASE_ASCEND_COST;
+    ascendCoinBonus = Mag.zero();
+    nextAscendCost = Mag.from(BASE_ASCEND_COST);
   }
 
   const PERMA_LABELS = {
@@ -5082,16 +5274,87 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     return n;
   }
 
+  function setTeamNoobOpacity(actor, opacity) {
+    if (!actor) return;
+    actor.traverse(function (child) {
+      if (!child.isMesh || !child.material) return;
+      const mats = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+      mats.forEach(function (mat) {
+        if (!mat) return;
+        mat.transparent = true;
+        mat.opacity = opacity;
+        mat.depthWrite = opacity > 0.95;
+        mat.needsUpdate = true;
+      });
+    });
+  }
+
+  function clearTeamNoobDeathAnim(actor) {
+    if (!actor) return;
+    actor.userData.deathAnim = null;
+    actor.rotation.x = 0;
+    actor.rotation.z = 0;
+    actor.position.y = 0;
+    actor.scale.set(1, 1, 1);
+    setTeamNoobOpacity(actor, 1);
+  }
+
+  function startTeamNoobDeathAnim(actor) {
+    if (!actor) return;
+    actor.visible = true;
+    if (actor.userData.deskButton) actor.userData.deskButton.visible = false;
+    actor.userData.deathAnim = {
+      age: 0,
+      fallDur: 0.58,
+      holdDur: 0.22,
+      fadeDur: 0.9,
+      baseY: actor.position.y,
+      fallSide: Math.random() > 0.5 ? 1 : -1,
+    };
+  }
+
+  function updateTeamNoobDeathAnims(dt) {
+    if (!teamNoobActors.length) return;
+    teamNoobActors.forEach(function (actor) {
+      const anim = actor && actor.userData.deathAnim;
+      if (!anim || anim.done) return;
+      anim.age += dt;
+      const fallT = Math.min(1, anim.age / anim.fallDur);
+      const fallEase = fallT * fallT * (3 - 2 * fallT);
+      // Tip forward onto the floor, slight sideways twist
+      actor.rotation.x = fallEase * (Math.PI / 2);
+      actor.rotation.z = fallEase * 0.28 * anim.fallSide;
+      actor.position.y = anim.baseY + fallEase * 0.12;
+
+      const fadeStart = anim.fallDur + anim.holdDur;
+      if (anim.age >= fadeStart) {
+        const fadeT = Math.min(1, (anim.age - fadeStart) / anim.fadeDur);
+        const fadeEase = fadeT * fadeT;
+        setTeamNoobOpacity(actor, 1 - fadeEase);
+        const shrink = 1 - fadeEase * 0.18;
+        actor.scale.set(shrink, shrink, shrink);
+        if (fadeT >= 1) {
+          anim.done = true;
+          actor.visible = false;
+          actor.userData.deathAnim = null;
+          setTeamNoobOpacity(actor, 1);
+          actor.scale.set(1, 1, 1);
+        }
+      }
+    });
+  }
+
   function reviveAllTeamNoobs() {
     teamNoobs.forEach(function (n) {
       if (n) n.alive = true;
     });
     teamNoobActors.forEach(function (actor) {
       if (!actor) return;
+      clearTeamNoobDeathAnim(actor);
       actor.visible = true;
       if (actor.userData.deskButton) actor.userData.deskButton.visible = true;
-      actor.rotation.x = 0;
-      actor.position.y = 0;
     });
   }
 
@@ -5106,12 +5369,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     const actor = teamNoobActors.find(function (a) {
       return a && a.userData.noobId === victim.id;
     });
-    if (actor) {
-      actor.visible = true;
-      actor.rotation.x = Math.PI / 2;
-      actor.position.y = 0.15;
-      if (actor.userData.deskButton) actor.userData.deskButton.visible = false;
-    }
+    if (actor) startTeamNoobDeathAnim(actor);
     saveTeamLeader();
     return victim;
   }
@@ -5179,46 +5437,29 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     return Number.isFinite(minLvl) ? minLvl : 0;
   }
 
-  /** cost = base * 2^level — may be Infinity in IEEE when huge */
+  /** cost = base * 2^level — Mag, safe past IEEE Infinity */
   function scaledPow2Cost(base, level) {
-    base = Number(base) || 0;
     level = Math.max(0, level | 0);
-    if (!(base > 0)) return 0;
-    if (level >= 1023) return Infinity;
-    const v = base * Math.pow(2, level);
-    return Number.isFinite(v) ? v : Infinity;
+    const b = Mag.from(base);
+    if (b.isZero()) return Mag.zero();
+    // 2^level = 10^(level * log10(2))
+    return b.mul(Mag.from(2).pow(level));
   }
 
   function canAffordScaled(base, level) {
-    base = Number(base) || 0;
-    level = Math.max(0, level | 0);
-    if (!(base > 0)) return true;
-    if (!(Number.isFinite(coins) && coins > 0)) return false;
-    const direct = scaledPow2Cost(base, level);
-    if (Number.isFinite(direct)) return coins >= direct;
-    // Log compare when 2^level overflows Number
-    return Math.log2(coins) + 1e-9 >= Math.log2(base) + level;
+    const cost = scaledPow2Cost(base, level);
+    if (cost.isZero()) return true;
+    return Mag.from(coins).gte(cost);
   }
 
   function chargeScaled(base, level) {
     if (!canAffordScaled(base, level)) return false;
-    const direct = scaledPow2Cost(base, level);
-    if (Number.isFinite(direct)) {
-      coins -= direct;
-      if (coins < 0) coins = 0;
-      return true;
-    }
-    // coins *= 1 - base*2^level / coins
-    const ratio = Math.pow(2, Math.log2(base) + level - Math.log2(coins));
-    coins *= Math.max(0, 1 - ratio);
-    if (!(coins > 1e-12)) coins = 0;
+    coins = Mag.from(coins).sub(scaledPow2Cost(base, level));
     return true;
   }
 
   function formatScaledCost(base, level) {
-    const direct = scaledPow2Cost(base, level);
-    if (Number.isFinite(direct)) return formatCoins(direct);
-    return formatCoins(base) + "×2^" + (level | 0);
+    return formatCoins(scaledPow2Cost(base, level));
   }
 
   function teamUpgradeCost(noob, key) {
@@ -5462,9 +5703,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       Object.keys(PERMA_LABELS).forEach(function (key) {
         const lvl = permanentLevel(key);
         const cost = HACKER_COIN_GOAL;
+        const gain = PERMA_FARM_BUY_RANKS;
         addRow(
           PERMA_LABELS[key],
-          "×" + lvl + " → ×" + (lvl + 1),
+          "×" + lvl + " → ×" + (lvl + gain) + " · +" + gain,
           "BUY · " + formatCoins(cost),
           !canAfford(cost),
           function () {
@@ -5897,22 +6139,26 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
     const prevEff = effectiveness;
     effectiveness = permaEff;
-    const effPow = Math.pow(1.5, effectiveness);
+    const effPowNum = Math.pow(1.5, effectiveness);
+    const effPowMag = Mag.from(1.5).pow(effectiveness);
 
     let death = BASE_DEATH_CHANCE;
     for (let i = 0; i < permaOdds; i++) {
-      death = clampDeathChance(death / (2 * effPow));
+      death = clampDeathChance(
+        death / (2 * (Number.isFinite(effPowNum) ? effPowNum : 1e308))
+      );
     }
     death = clampDeathChance(death);
 
-    let strBonus = 0;
+    let strBonus = Mag.zero();
+    const gain = Mag.from(2).mul(effPowMag);
     for (let j = 0; j < permaStr; j++) {
-      strBonus += 2 * effPow;
+      strBonus = strBonus.add(gain);
     }
 
-    let auto = 0;
+    let auto = Mag.zero();
     for (let k = 0; k < permaAuto; k++) {
-      auto += effPow;
+      auto = auto.add(effPowMag);
     }
 
     effectiveness = prevEff;
@@ -5923,10 +6169,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       buttonStrength: permaStr,
       strengthCoinBonus: strBonus,
       autoClicksPerSec: auto,
-      nextUpgradeCost: BASE_UPGRADE_COST,
-      nextStrengthCost: BASE_STRENGTH_COST,
-      nextAutoCost: BASE_AUTO_COST,
-      nextEffectivenessCost: BASE_EFFECTIVENESS_COST,
+      nextUpgradeCost: Mag.from(BASE_UPGRADE_COST),
+      nextStrengthCost: Mag.from(BASE_STRENGTH_COST),
+      nextAutoCost: Mag.from(BASE_AUTO_COST),
+      nextEffectivenessCost: Mag.from(BASE_EFFECTIVENESS_COST),
     };
   }
 
@@ -5963,26 +6209,25 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     }
     if (buttonStrength < floor.buttonStrength) {
       buttonStrength = floor.buttonStrength;
-      strengthCoinBonus = Math.max(strengthCoinBonus, floor.strengthCoinBonus);
+      strengthCoinBonus = Mag.from(strengthCoinBonus).max(floor.strengthCoinBonus);
     } else {
-      strengthCoinBonus = Math.max(strengthCoinBonus, floor.strengthCoinBonus);
+      strengthCoinBonus = Mag.from(strengthCoinBonus).max(floor.strengthCoinBonus);
     }
-    if (autoClicksPerSec < floor.autoClicksPerSec) {
-      autoClicksPerSec = floor.autoClicksPerSec;
+    if (Mag.from(autoClicksPerSec).lt(floor.autoClicksPerSec)) {
+      autoClicksPerSec = Mag.from(floor.autoClicksPerSec);
     }
     // Permanent ranks must not inflate the price ladder
     if (buttonStrength <= floor.buttonStrength) {
-      nextStrengthCost = Math.min(nextStrengthCost, BASE_STRENGTH_COST);
+      nextStrengthCost = Mag.from(nextStrengthCost).min(BASE_STRENGTH_COST);
     }
     if (upgradeLevel <= floor.upgradeLevel) {
-      nextUpgradeCost = Math.min(nextUpgradeCost, BASE_UPGRADE_COST);
+      nextUpgradeCost = Mag.from(nextUpgradeCost).min(BASE_UPGRADE_COST);
     }
-    if (autoClicksPerSec <= floor.autoClicksPerSec + 1e-9) {
-      nextAutoCost = Math.min(nextAutoCost, BASE_AUTO_COST);
+    if (Mag.from(autoClicksPerSec).lte(floor.autoClicksPerSec)) {
+      nextAutoCost = Mag.from(nextAutoCost).min(BASE_AUTO_COST);
     }
     if (effectiveness <= floor.effectiveness) {
-      nextEffectivenessCost = Math.min(
-        nextEffectivenessCost,
+      nextEffectivenessCost = Mag.from(nextEffectivenessCost).min(
         BASE_EFFECTIVENESS_COST
       );
     }
@@ -5994,15 +6239,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       ASCEND_KEY,
       JSON.stringify({
         level: ascendLevel,
-        bonus: ascendCoinBonus,
-        cost: nextAscendCost,
+        bonus: Mag.from(ascendCoinBonus).toJSON(),
+        cost: Mag.from(nextAscendCost).toJSON(),
       })
     );
     updateAscendLine();
   }
 
   function formatEffMult(n) {
-    const s = Number(n).toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+    const mag = Mag.from(n);
+    if (mag.e >= 6) return formatCoins(mag);
+    const num = mag.toNumber();
+    if (!Number.isFinite(num)) return formatCoins(mag);
+    const s = num.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
     return s || "1";
   }
 
@@ -6012,16 +6261,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   }
 
   function nextStrengthGain() {
-    return 2 * effectivenessPower();
+    return Mag.from(2).mul(Mag.from(1.5).pow(effectiveness));
   }
 
   function nextAutoGain() {
-    return effectivenessPower();
+    return Mag.from(1.5).pow(effectiveness);
   }
 
   function nextAscendGain() {
     // Ascension is never scaled by Effectiveness.
-    return 1;
+    return Mag.from(1);
   }
 
   function oddsDivisorPerBuy() {
@@ -6033,7 +6282,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     // Workers only produce inside the control room
     const teamBonus =
       teamLeaderUnlocked && teamMode === "control" ? teamPassiveRate() : 0;
-    return autoClicksPerSec + teamBonus;
+    return Mag.from(autoClicksPerSec).add(teamBonus);
   }
 
   function fitNumberEl(el, text, opts) {
@@ -6120,7 +6369,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         "ASCENSION LEVEL " +
         ascendLevel +
         " · BASE " +
-        formatEffMult(1 + ascendCoinBonus) +
+        formatEffMult(Mag.from(1).add(ascendCoinBonus)) +
         " COIN / CLICK" +
         (effectiveness > 0
           ? " · NEXT NON-ASCEND ×" + formatEffMult(effectivenessPower())
@@ -6130,7 +6379,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   function coinsPerClick() {
     // Bonuses are locked in at purchase time — Effectiveness is not retroactive.
-    return 1 + ascendCoinBonus + strengthCoinBonus;
+    return Mag.from(1).add(ascendCoinBonus).add(strengthCoinBonus);
   }
 
   function normalizeName(raw) {
@@ -6181,7 +6430,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   function sortLeaderboard(list) {
     return (list || []).slice().sort(function (a, b) {
-      return (b.pulses | 0) - (a.pulses | 0);
+      return Mag.from(b.pulses).cmp(a.pulses);
     });
   }
 
@@ -6250,8 +6499,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const prev = map[key];
       if (
         !prev ||
-        (entry.pulses | 0) > (prev.pulses | 0) ||
-        ((entry.pulses | 0) === (prev.pulses | 0) &&
+        Mag.from(entry.pulses).gt(prev.pulses) ||
+        (Mag.from(entry.pulses).cmp(prev.pulses) === 0 &&
           String(entry.date || "") > String(prev.date || ""))
       ) {
         map[key] = entry;
@@ -6284,7 +6533,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           return {
             id: id,
             name: label,
-            pulses: Math.max(0, parseInt(row.score, 10) || 0),
+            pulses: Mag.from(Math.max(0, parseInt(row.score, 10) || 0)),
             date: String(row.date || ""),
           };
         })
@@ -6372,9 +6621,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       });
   }
 
+  function magLeaderboardInt(v) {
+    const mag = Mag.from(v);
+    if (mag.isZero()) return 0;
+    const n = mag.toNumber();
+    if (Number.isFinite(n)) return Math.max(0, Math.floor(n));
+    // Beyond Number range: pack exponent so bigger Mag still ranks higher
+    const packed = Math.floor(mag.e * 1e6 + mag.m * 1e5);
+    if (!Number.isFinite(packed)) return Number.MAX_SAFE_INTEGER;
+    return Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, packed));
+  }
+
   function updateLeaderboardScore() {
     if (!hasPlayerName()) return Promise.resolve(false);
-    const score = Math.max(0, highScore | 0);
+    const score = magLeaderboardInt(highScore);
     if (score <= 0) return Promise.resolve(false);
     return submitScoreOnline(score);
   }
@@ -6417,7 +6677,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       const score = document.createElement("div");
       score.className = "lb-score";
-      score.textContent = formatCoins(entry.pulses | 0);
+      score.textContent = formatCoins(entry.pulses);
 
       row.appendChild(rank);
       row.appendChild(meta);
@@ -6542,61 +6802,93 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     return false;
   }
 
-  /** Sum of start + 2*start + 4*start + ... for n buys (exact sequential prices) */
+  /** Sum of start + 2*start + 4*start + ... for n buys */
   function bulkCost(startCost, n) {
-    if (n <= 0) return 0;
-    let total = 0;
-    let cost = startCost;
+    if (n <= 0) return Mag.zero();
+    let total = Mag.zero();
+    let cost = Mag.from(startCost);
     for (let i = 0; i < n; i++) {
-      total += cost;
-      if (!Number.isFinite(total)) return Infinity;
-      cost *= 2;
-      if (!Number.isFinite(cost) && i < n - 1) return Infinity;
+      total = total.add(cost);
+      cost = cost.mul(2);
     }
     return total;
   }
 
   function canAfford(total) {
-    return Number.isFinite(total) && coins >= total;
+    return Mag.from(coins).gte(Mag.from(total));
   }
 
+  // Short-scale names: label for 10^exp (exp multiple of 3, >=15)
+  const MAG_NAME_TIERS = [
+    [303, " CENTILLION"],
+    [300, " NOVEMNONAGINTILLION"],
+    [100, " GOOGOL"],
+    [63, " VIGINTILLION"],
+    [60, " NOVEMDECILLION"],
+    [57, " OCTODECILLION"],
+    [54, " SEPTENDECILLION"],
+    [51, " SEXDECILLION"],
+    [48, " QUINDECILLION"],
+    [45, " QUATTUORDECILLION"],
+    [42, " TREDECILLION"],
+    [39, " DUODECILLION"],
+    [36, " UNDECILLION"],
+    [33, " DECILLION"],
+    [30, " NONILLION"],
+    [27, " OCTILLION"],
+    [24, " SEPTILLION"],
+    [21, " SEXTILLION"],
+    [18, " QUINTILLION"],
+    [15, " QUADRILLION"],
+  ];
+
   function formatCoins(n) {
-    if (!Number.isFinite(n)) return "∞";
-    // Named large powers (short scale). Prefer one-decimal readability.
-    const tiers = [
-      [1e63, " VIGINTILLION"],
-      [1e60, " NOVEMDECILLION"],
-      [1e57, " OCTODECILLION"],
-      [1e54, " SEPTENDECILLION"],
-      [1e51, " SEXDECILLION"],
-      [1e48, " QUINDECILLION"],
-      [1e45, " QUATTUORDECILLION"],
-      [1e42, " TREDECILLION"],
-      [1e39, " DUODECILLION"],
-      [1e36, " UNDECILLION"],
-      [1e33, " DECILLION"],
-      [1e30, " NONILLION"],
-      [1e27, " OCTILLION"],
-      [1e24, " SEPTILLION"],
-      [1e21, " SEXTILLION"],
-      [1e18, " QUINTILLION"],
-      [1e15, " QUADRILLION"],
-    ];
-    for (let i = 0; i < tiers.length; i++) {
-      if (n >= tiers[i][0]) {
-        const v = n / tiers[i][0];
-        if (v >= 1e6) {
-          return v.toExponential(3).replace(/\.?0+e/, "e") + tiers[i][1];
+    const mag = Mag.from(n);
+    if (mag.isZero()) return "0";
+    // Cap display at googolplex
+    if (mag.e >= GOOGOLPLEX_EXP) {
+      if (mag.m <= 1.0001) return "1 GOOGOLPLEX";
+      return mag.m.toFixed(2).replace(/\.?0+$/, "") + " GOOGOLPLEX";
+    }
+    // Layered sci-notation when the exponent itself is huge
+    if (mag.e >= 1e6) {
+      return (
+        mag.m.toFixed(2).replace(/\.?0+$/, "") +
+        "e" +
+        formatCoins(Mag.from(mag.e))
+      );
+    }
+    if (mag.e >= 1000) {
+      return mag.m.toFixed(2).replace(/\.?0+$/, "") + "e" + Math.round(mag.e);
+    }
+    for (let i = 0; i < MAG_NAME_TIERS.length; i++) {
+      const exp = MAG_NAME_TIERS[i][0];
+      const name = MAG_NAME_TIERS[i][1];
+      if (mag.e >= exp) {
+        const v = mag.m * Math.pow(10, mag.e - exp);
+        if (!Number.isFinite(v)) {
+          return mag.m.toFixed(2) + "e" + Math.round(mag.e);
         }
-        if (v >= 100) return Math.round(v) + tiers[i][1];
-        return v.toFixed(1).replace(/\.0$/, "") + tiers[i][1];
+        if (v >= 1e6) {
+          return v.toExponential(3).replace(/\.?0+e/, "e") + name;
+        }
+        if (v >= 100) return Math.round(v) + name;
+        return v.toFixed(1).replace(/\.0$/, "") + name;
       }
     }
-    if (n >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, "") + "B";
-    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
-    if (n >= 1e4) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
-    if (Number.isInteger(n)) return String(n);
-    return n.toFixed(1).replace(/\.0$/, "");
+    const num = mag.toNumber();
+    if (!Number.isFinite(num)) {
+      return mag.m.toFixed(2) + "e" + Math.round(mag.e);
+    }
+    if (num >= 1e9) return (num / 1e9).toFixed(1).replace(/\.0$/, "") + "B";
+    if (num >= 1e6) return (num / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+    if (num >= 1e4) return (num / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+    if (Number.isInteger(num)) return String(num);
+    return num.toFixed(1).replace(/\.0$/, "");
+  }
+
+  function coinsAtLeast(goal) {
+    return Mag.from(coins).gte(goal);
   }
 
   let hudFitTimer = null;
@@ -6606,8 +6898,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (!inGame || !hudStats || hudStats.hidden) return;
       setCoinDisplay(coins);
       setOddsDisplay(formatPct(deathChance));
-      if (pulseCountEl) fitNumberEl(pulseCountEl, String(pulses));
-      if (bestCountEl) fitNumberEl(bestCountEl, String(highScore));
+      if (pulseCountEl) fitNumberEl(pulseCountEl, formatCoins(pulses));
+      if (bestCountEl) fitNumberEl(bestCountEl, formatCoins(highScore));
       if (autoCountEl) {
         fitNumberEl(autoCountEl, formatEffMult(autoClickRate()) + "/s");
       }
@@ -6626,35 +6918,38 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     stopAutoClicker();
     const workerRate =
       teamLeaderUnlocked && teamMode === "control" ? teamPassiveRate() : 0;
-    const buttonAuto = autoClicksPerSec;
-    const rate = buttonAuto + workerRate;
+    const buttonAuto = Mag.from(autoClicksPerSec);
+    const rateMag = buttonAuto.add(workerRate);
     if (
       !inGame ||
       !alive ||
-      rate <= 0 ||
+      rateMag.lte(0) ||
       hackerActive ||
       escaping ||
       robotVendorActive ||
       teamMode === "intro"
     )
       return;
-    // Yard: workers idle — only the personal button auto runs
-    const ms = Math.max(16, 1000 / Math.max(rate, 0.05));
+    // Cap timer frequency; display still shows full Mag rate
+    let rateNum = rateMag.toNumber();
+    if (!Number.isFinite(rateNum) || rateNum > 60) rateNum = 60;
+    const ms = Math.max(16, 1000 / Math.max(rateNum, 0.05));
     autoTimer = setInterval(function () {
       if (!inGame || !alive || resolving || pressing) return;
       if (teamMode === "control" && workerRate > 0) {
-        const gain = Math.max(0.01, teamPassiveRate() * (ms / 1000));
-        coins += gain;
-        teamPassiveAcc += gain;
+        const gain = Mag.from(Math.max(0.01, teamPassiveRate() * (ms / 1000)));
+        coins = Mag.from(coins).add(gain);
+        teamPassiveAcc += gain.toNumber() || 0;
         if (teamPassiveAcc >= 1) {
-          pulses += Math.floor(teamPassiveAcc);
-          teamPassiveAcc -= Math.floor(teamPassiveAcc);
-          if (pulseCountEl) fitNumberEl(pulseCountEl, String(pulses));
+          const addP = Math.floor(teamPassiveAcc);
+          pulses = Mag.from(pulses).add(addP);
+          teamPassiveAcc -= addP;
+          if (pulseCountEl) fitNumberEl(pulseCountEl, formatCoins(pulses));
           saveHighScore();
         }
         setCoinDisplay(coins);
       }
-      if (buttonAuto > 0 && teamMode !== "intro") {
+      if (buttonAuto.gt(0) && teamMode !== "intro") {
         performPress(true);
       }
     }, ms);
@@ -6662,19 +6957,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   function buildRunSnapshot() {
     return {
-      coins: coins,
-      pulses: pulses,
+      coins: Mag.from(coins).toJSON(),
+      pulses: Mag.from(pulses).toJSON(),
       alive: alive,
       deathChance: deathChance,
-      nextUpgradeCost: nextUpgradeCost,
+      nextUpgradeCost: Mag.from(nextUpgradeCost).toJSON(),
       upgradeLevel: upgradeLevel,
       buttonStrength: buttonStrength,
-      strengthCoinBonus: strengthCoinBonus,
-      nextStrengthCost: nextStrengthCost,
-      autoClicksPerSec: autoClicksPerSec,
-      nextAutoCost: nextAutoCost,
+      strengthCoinBonus: Mag.from(strengthCoinBonus).toJSON(),
+      nextStrengthCost: Mag.from(nextStrengthCost).toJSON(),
+      autoClicksPerSec: Mag.from(autoClicksPerSec).toJSON(),
+      nextAutoCost: Mag.from(nextAutoCost).toJSON(),
       effectiveness: effectiveness,
-      nextEffectivenessCost: nextEffectivenessCost,
+      nextEffectivenessCost: Mag.from(nextEffectivenessCost).toJSON(),
       buyQty: buyQty,
       shopOpen: shopOpen,
       shopWidthPct: shopWidthPct,
@@ -6709,7 +7004,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const raw = localStorage.getItem(RUN_SAVE_KEY);
       if (!raw) return null;
       const data = JSON.parse(raw);
-      if (!data || typeof data.coins !== "number") return null;
+      if (!data || data.coins == null) return null;
       return data;
     } catch (err) {
       return null;
@@ -6736,9 +7031,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   function makeServerName(run) {
     return (
       "FACTORY · " +
-      (run.pulses | 0) +
+      formatCoins(run.pulses) +
       "P / " +
-      formatCoins(Number(run.coins) || 0) +
+      formatCoins(run.coins) +
       "C"
     );
   }
@@ -7062,11 +7357,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     const afterOddsDeath =
       deathChance / Math.pow(oddsDivisorPerBuy(), buyQty);
     const strengthGain = nextStrengthGain();
-    const afterStrength = coinsPerClick() + buyQty * strengthGain;
+    const afterStrength = coinsPerClick().add(
+      Mag.from(strengthGain).mul(buyQty)
+    );
     const autoGain = nextAutoGain();
-    const afterAuto = autoClickRate() + buyQty * autoGain;
-    const baseCoins = 1 + ascendCoinBonus;
-    const afterAscendBase = baseCoins + nextAscendGain();
+    const afterAuto = autoClickRate().add(Mag.from(autoGain).mul(buyQty));
+    const baseCoins = Mag.from(1).add(ascendCoinBonus);
+    const afterAscendBase = baseCoins.add(nextAscendGain());
     const afterEff = Math.pow(1.5, effectiveness + buyQty);
 
     setOddsDisplay(deathText);
@@ -7392,12 +7689,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       return;
     }
 
-    coins -= total;
+    coins = Mag.from(coins).sub(total);
     setCoinDisplay(coins);
     for (let i = 0; i < qty; i++) {
       deathChance = clampDeathChance(deathChance / oddsDivisorPerBuy());
       upgradeLevel += 1;
-      nextUpgradeCost = nextUpgradeCost * 2;
+      nextUpgradeCost = Mag.from(nextUpgradeCost).mul(2);
     }
     deathChance = clampDeathChance(deathChance);
     refillRollBag();
@@ -7434,12 +7731,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       return;
     }
 
-    coins -= total;
+    coins = Mag.from(coins).sub(total);
     setCoinDisplay(coins);
     for (let i = 0; i < qty; i++) {
-      strengthCoinBonus += nextStrengthGain();
+      strengthCoinBonus = Mag.from(strengthCoinBonus).add(nextStrengthGain());
       buttonStrength += 1;
-      nextStrengthCost = nextStrengthCost * 2;
+      nextStrengthCost = Mag.from(nextStrengthCost).mul(2);
     }
     if (audio()) audio().upgrade();
 
@@ -7477,11 +7774,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       return;
     }
 
-    coins -= total;
+    coins = Mag.from(coins).sub(total);
     setCoinDisplay(coins);
     for (let i = 0; i < qty; i++) {
-      autoClicksPerSec += nextAutoGain();
-      nextAutoCost = nextAutoCost * 2;
+      autoClicksPerSec = Mag.from(autoClicksPerSec).add(nextAutoGain());
+      nextAutoCost = Mag.from(nextAutoCost).mul(2);
     }
     if (audio()) audio().upgrade();
 
@@ -7520,11 +7817,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       return;
     }
 
-    coins -= total;
+    coins = Mag.from(coins).sub(total);
     setCoinDisplay(coins);
     for (let i = 0; i < qty; i++) {
       effectiveness += 1;
-      nextEffectivenessCost = nextEffectivenessCost * 2;
+      nextEffectivenessCost = Mag.from(nextEffectivenessCost).mul(2);
     }
     // Only future purchases are stronger — do not touch current odds/strength/auto.
     if (audio()) audio().upgrade();
@@ -7574,11 +7871,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       return;
     }
 
-    coins -= nextAscendCost;
+    coins = Mag.from(coins).sub(nextAscendCost);
     setCoinDisplay(coins);
-    ascendCoinBonus += nextAscendGain();
+    ascendCoinBonus = Mag.from(ascendCoinBonus).add(nextAscendGain());
     ascendLevel += 1;
-    nextAscendCost = nextAscendCost * 2;
+    nextAscendCost = Mag.from(nextAscendCost).mul(2);
     saveAscend();
     ascending = true;
     stopAutoClicker();
@@ -7592,7 +7889,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         "ASCENSION " +
         ascendLevel +
         " · BASE " +
-        formatEffMult(1 + ascendCoinBonus) +
+        formatEffMult(Mag.from(1).add(ascendCoinBonus)) +
         " / CLICK";
       shopBuyMsg.classList.add("is-ok");
     }
@@ -7657,8 +7954,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     }, 2400);
   }
 
-  highScoreEl.textContent = String(highScore);
-  bestCountEl.textContent = String(highScore);
+  highScoreEl.textContent = formatCoins(highScore);
+  bestCountEl.textContent = formatCoins(highScore);
   updateFairLine();
   updateAscendLine();
   updatePlayerLine();
@@ -8327,13 +8624,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         );
       });
     }
-    const total = CUTSCENE_SKIPPER_COST * robotBuyQty;
+    const total = Mag.from(CUTSCENE_SKIPPER_COST).mul(robotBuyQty);
     if (robotBuySkipperBtn) {
       robotBuySkipperBtn.textContent =
         "BUY x" + robotBuyQty + " · " + formatCoins(total);
-      robotBuySkipperBtn.disabled = !(
-        Number.isFinite(coins) && coins >= total
-      );
+      robotBuySkipperBtn.disabled = !canAfford(total);
     }
   }
 
@@ -8363,7 +8658,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     ) {
       return false;
     }
-    if (!(Number(coins) >= ROBOT_VENDOR_COIN_GOAL)) return false;
+    if (!coinsAtLeast(ROBOT_VENDOR_COIN_GOAL)) return false;
 
     robotVendorOfferedThisRun = true;
     robotVendorActive = true;
@@ -8399,7 +8694,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   }
 
   function maybeTriggerRobotVendor() {
-    if (!(Number(coins) >= ROBOT_VENDOR_COIN_GOAL)) return false;
+    if (!coinsAtLeast(ROBOT_VENDOR_COIN_GOAL)) return false;
     // Already unlocked + seen once: keep playing, open shop via MECHANIC button
     if (robotShopUnlocked) {
       syncVendorShopBtn();
@@ -8411,8 +8706,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   function buyCutsceneSkippers() {
     if (!robotVendorActive) return;
     const qty = robotBuyQty;
-    const total = CUTSCENE_SKIPPER_COST * qty;
-    if (!(Number.isFinite(coins) && coins >= total)) {
+    const total = Mag.from(CUTSCENE_SKIPPER_COST).mul(qty);
+    if (!canAfford(total)) {
       if (robotShopMsg) {
         robotShopMsg.textContent = "NOT ENOUGH COINS";
         robotShopMsg.style.color = "#ffb0a8";
@@ -8421,7 +8716,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       refreshRobotShopUI();
       return;
     }
-    coins -= total;
+    coins = Mag.from(coins).sub(total);
     cutsceneSkippers += qty;
     saveCutsceneSkippers();
     if (coinCountEl) setCoinDisplay(coins);
@@ -9385,28 +9680,31 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if (!PERMA_LABELS[key]) return;
     if (teamMode !== "control") return;
     const cost = HACKER_COIN_GOAL;
-    if (!(Number.isFinite(coins) && coins >= cost)) {
+    const gain = PERMA_FARM_BUY_RANKS;
+    if (!canAfford(cost)) {
       showTeamToast("NEED 1,000,000 COINS");
       if (audio()) audio().buttonRelease();
       refreshStationBoards();
       return;
     }
-    coins -= cost;
-    grantPermanent(key);
+    coins = Mag.from(coins).sub(cost);
+    grantPermanent(key, gain);
     setCoinDisplay(coins);
     enforcePermanentFloorOnRun();
     updateOddsUI();
     saveActiveRun();
     if (audio()) audio().upgrade();
-    showTeamToast((PERMA_LABELS[key] || key) + " · ×" + permanentLevel(key));
+    showTeamToast(
+      (PERMA_LABELS[key] || key) + " · +" + gain + " · ×" + permanentLevel(key)
+    );
     refreshStationBoards();
     syncAutoClicker();
   }
 
   function resetTeamBoxRun() {
     const wasYard = teamMode === "yard";
-    coins = 0;
-    pulses = 0;
+    coins = Mag.zero();
+    pulses = Mag.zero();
     alive = true;
     pressing = false;
     resolving = false;
@@ -10084,7 +10382,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if (hackerActive && !force) return false;
     if (!alive && !force) return false;
     if (hackerResolvedThisRun && !force) return false;
-    if (!(Number(coins) >= HACKER_COIN_GOAL)) return false;
+    if (!coinsAtLeast(HACKER_COIN_GOAL)) return false;
 
     if (force) {
       if (hackerActive) hideHackerUI();
@@ -10157,7 +10455,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   function maybeTriggerHacker(opts) {
     opts = opts || {};
-    if (!(Number(coins) >= HACKER_COIN_GOAL)) return false;
+    if (!coinsAtLeast(HACKER_COIN_GOAL)) return false;
     if (!inGame || escaping || ascending) return false;
     if (teamMode === "intro" || teamMode === "control") return false;
     // Team leaders never see Operator Null — use VERSION / PERMA station instead
@@ -10460,12 +10758,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   }
 
   function saveHighScore() {
-    if (pulses > highScore) {
-      highScore = pulses;
-      localStorage.setItem(HIGH_SCORE_KEY, String(highScore));
+    if (Mag.from(pulses).gt(highScore)) {
+      highScore = Mag.from(pulses);
+      try {
+        localStorage.setItem(HIGH_SCORE_KEY, JSON.stringify(highScore.toJSON()));
+      } catch (err) {
+        /* ignore */
+      }
     }
-    highScoreEl.textContent = String(highScore);
-    bestCountEl.textContent = String(highScore);
+    if (highScoreEl) highScoreEl.textContent = formatCoins(highScore);
+    if (bestCountEl) bestCountEl.textContent = formatCoins(highScore);
     if (hasPlayerName()) updateLeaderboardScore();
   }
 
@@ -10483,7 +10785,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   function gainCoin() {
     const gained = coinsPerClick();
-    coins += gained;
+    coins = Mag.from(coins).add(gained);
     fairStats.coins += 1;
     saveFairStats();
     setCoinDisplay(coins);
@@ -10529,7 +10831,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       saveFairStats();
     }
     saveHighScore();
-    if (deathPulsesEl) deathPulsesEl.textContent = String(pulses);
+    if (deathPulsesEl) deathPulsesEl.textContent = formatCoins(pulses);
     deathCoinsEl.textContent = formatCoins(coins);
     document.body.classList.add("is-dead");
     document.body.style.cursor = "default";
@@ -10539,11 +10841,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (deathSubEl) {
         deathSubEl.textContent =
           "The hook took you. Base coins / click is now " +
-          formatEffMult(1 + ascendCoinBonus) +
+          formatEffMult(Mag.from(1).add(ascendCoinBonus)) +
           " forever.";
       }
       promptEl.textContent =
-        "ASCENDED · BASE " + formatEffMult(1 + ascendCoinBonus);
+        "ASCENDED · BASE " +
+        formatEffMult(Mag.from(1).add(ascendCoinBonus));
     } else {
       if (deathCodeEl) deathCodeEl.textContent = "ERR_SIGNAL_LOST";
       if (deathTitleEl) deathTitleEl.textContent = "YOU DIED";
@@ -10583,23 +10886,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if (!fromAuto && !hitButton()) return;
 
     // Already sitting on 1M+ coins → cutscene before another roll
-    if (Number(coins) >= HACKER_COIN_GOAL && !hackerResolvedThisRun) {
+    if (coinsAtLeast(HACKER_COIN_GOAL) && !hackerResolvedThisRun) {
       if (maybeTriggerHacker()) return;
     }
 
     // First power-tier offer only — never block presses after unlock
-    if (
-      Number(coins) >= ROBOT_VENDOR_COIN_GOAL &&
-      !robotVendorOfferedThisRun
-    ) {
+    if (coinsAtLeast(ROBOT_VENDOR_COIN_GOAL) && !robotVendorOfferedThisRun) {
       if (maybeTriggerRobotVendor()) return;
       robotVendorOfferedThisRun = true;
     }
 
     resolving = true;
     // Pulses scale with click power (strength + ascension), same as coin payout
-    pulses += coinsPerClick();
-    if (pulseCountEl) fitNumberEl(pulseCountEl, String(pulses));
+    pulses = Mag.from(pulses).add(coinsPerClick());
+    if (pulseCountEl) fitNumberEl(pulseCountEl, formatCoins(pulses));
     saveHighScore();
     pressVisual(true, !fromAuto);
 
@@ -10647,8 +10947,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     void enterWipe.offsetWidth;
     enterWipe.classList.add("active");
 
-    coins = 0;
-    pulses = 0;
+    coins = Mag.zero();
+    pulses = Mag.zero();
     alive = true;
     hackerResolvedThisRun = false;
     hackerActive = false;
@@ -10673,8 +10973,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       shopBuyMsg.classList.toggle("is-ok", usedAdminSeed);
     }
     setCoinDisplay(coins);
-    pulseCountEl.textContent = String(pulses);
-    bestCountEl.textContent = String(highScore);
+    if (pulseCountEl) fitNumberEl(pulseCountEl, formatCoins(pulses));
+    if (bestCountEl) bestCountEl.textContent = formatCoins(highScore);
     if (autoCountEl) {
       autoCountEl.textContent = formatEffMult(autoClickRate()) + "/s";
     }
@@ -10726,7 +11026,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       syncVendorShopBtn();
       saveActiveRun();
       // If admin seed / run already at 1M+ coins, fire the cutscene
-      if (Number(coins) >= HACKER_COIN_GOAL) {
+      if (coinsAtLeast(HACKER_COIN_GOAL)) {
         maybeTriggerHacker({ force: true });
       }
       maybeTriggerRobotVendor();
@@ -10736,10 +11036,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   function resumeActiveRun(data) {
     if (data.serverId) currentServerId = data.serverId;
     // Never use |0 — it truncates huge coin/pulse values to 32-bit
-    coins = Number(data.coins);
-    if (!Number.isFinite(coins) || coins < 0) coins = 0;
-    pulses = Number(data.pulses);
-    if (!Number.isFinite(pulses) || pulses < 0) pulses = 0;
+    coins = Mag.from(data.coins);
+    pulses = Mag.from(data.pulses);
     alive = data.alive !== false;
     deathChance = clampDeathChance(
       typeof data.deathChance === "number" && data.deathChance > 0
@@ -10747,28 +11045,38 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         : BASE_DEATH_CHANCE
     );
     nextUpgradeCost =
-      typeof data.nextUpgradeCost === "number"
-        ? data.nextUpgradeCost
-        : BASE_UPGRADE_COST;
+      data.nextUpgradeCost != null
+        ? Mag.from(data.nextUpgradeCost)
+        : Mag.from(BASE_UPGRADE_COST);
+    if (nextUpgradeCost.isZero()) nextUpgradeCost = Mag.from(BASE_UPGRADE_COST);
     upgradeLevel = data.upgradeLevel | 0;
     buttonStrength = data.buttonStrength | 0;
-    if (typeof data.strengthCoinBonus === "number") {
-      strengthCoinBonus = data.strengthCoinBonus;
+    if (data.strengthCoinBonus != null) {
+      strengthCoinBonus = Mag.from(data.strengthCoinBonus);
     } else {
-      strengthCoinBonus = buttonStrength * 2;
+      strengthCoinBonus = Mag.from(buttonStrength * 2);
     }
     nextStrengthCost =
-      typeof data.nextStrengthCost === "number"
-        ? data.nextStrengthCost
-        : BASE_STRENGTH_COST;
-    autoClicksPerSec = Number(data.autoClicksPerSec) || 0;
+      data.nextStrengthCost != null
+        ? Mag.from(data.nextStrengthCost)
+        : Mag.from(BASE_STRENGTH_COST);
+    if (nextStrengthCost.isZero()) nextStrengthCost = Mag.from(BASE_STRENGTH_COST);
+    autoClicksPerSec = Mag.from(data.autoClicksPerSec || 0);
     nextAutoCost =
-      typeof data.nextAutoCost === "number" ? data.nextAutoCost : BASE_AUTO_COST;
+      data.nextAutoCost != null
+        ? Mag.from(data.nextAutoCost)
+        : Mag.from(BASE_AUTO_COST);
+    if (nextAutoCost.isZero()) nextAutoCost = Mag.from(BASE_AUTO_COST);
     effectiveness = data.effectiveness | 0;
     nextEffectivenessCost =
-      typeof data.nextEffectivenessCost === "number"
-        ? data.nextEffectivenessCost
-        : BASE_EFFECTIVENESS_COST * Math.pow(1.5, effectiveness);
+      data.nextEffectivenessCost != null
+        ? Mag.from(data.nextEffectivenessCost)
+        : Mag.from(BASE_EFFECTIVENESS_COST).mul(
+            Mag.from(1.5).pow(effectiveness)
+          );
+    if (nextEffectivenessCost.isZero()) {
+      nextEffectivenessCost = Mag.from(BASE_EFFECTIVENESS_COST);
+    }
     buyQty = [1, 10, 100, 1000].indexOf(data.buyQty) >= 0 ? data.buyQty : 1;
     shopOpen = false;
     shopWidthPct =
@@ -10802,9 +11110,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     overhead.intensity = alive ? 0.55 : 0.15;
 
     setCoinDisplay(coins);
-    pulseCountEl.textContent = String(pulses);
-    bestCountEl.textContent = String(highScore);
-    if (autoCountEl) autoCountEl.textContent = autoClickRate() + "/s";
+    if (pulseCountEl) fitNumberEl(pulseCountEl, formatCoins(pulses));
+    if (bestCountEl) bestCountEl.textContent = formatCoins(highScore);
+    if (autoCountEl) {
+      autoCountEl.textContent = formatEffMult(autoClickRate()) + "/s";
+    }
     hudStats.hidden = false;
     promptEl.hidden = false;
     promptEl.textContent = oddsPromptText();
@@ -10887,15 +11197,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     document.body.classList.remove("is-escaping");
     shopOpen = false;
     deathChance = BASE_DEATH_CHANCE;
-    nextUpgradeCost = BASE_UPGRADE_COST;
+    nextUpgradeCost = Mag.from(BASE_UPGRADE_COST);
     upgradeLevel = 0;
     buttonStrength = 0;
-    strengthCoinBonus = 0;
-    nextStrengthCost = BASE_STRENGTH_COST;
-    autoClicksPerSec = 0;
-    nextAutoCost = BASE_AUTO_COST;
+    strengthCoinBonus = Mag.zero();
+    nextStrengthCost = Mag.from(BASE_STRENGTH_COST);
+    autoClicksPerSec = Mag.zero();
+    nextAutoCost = Mag.from(BASE_AUTO_COST);
     effectiveness = 0;
-    nextEffectivenessCost = BASE_EFFECTIVENESS_COST;
+    nextEffectivenessCost = Mag.from(BASE_EFFECTIVENESS_COST);
     buyQty = 1;
     stopAutoClicker();
     buttonAppear = 0;
@@ -10939,7 +11249,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     hudStats.hidden = true;
     promptEl.hidden = true;
     titleScreen.classList.remove("is-gone");
-    highScoreEl.textContent = String(highScore);
+    highScoreEl.textContent = formatCoins(highScore);
     updateAscendLine();
     updatePermaLines();
     syncNewRunBtn();
@@ -11043,37 +11353,44 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       id: "coins",
       group: "RUN",
       label: "COINS",
-      type: "number",
+      type: "text",
       get: function () {
-        return coins;
+        return Mag.from(coins).toString();
       },
       set: function (v) {
-        coins = Math.max(0, v);
+        coins = Mag.from(v);
       },
     });
     registerAdminField({
       id: "pulses",
       group: "RUN",
       label: "PULSES",
-      type: "number",
+      type: "text",
       get: function () {
-        return pulses;
+        return Mag.from(pulses).toString();
       },
       set: function (v) {
-        pulses = Math.max(0, v);
+        pulses = Mag.from(v);
       },
     });
     registerAdminField({
       id: "highScore",
       group: "RUN",
       label: "HIGH SCORE",
-      type: "number",
+      type: "text",
       get: function () {
-        return highScore;
+        return Mag.from(highScore).toString();
       },
       set: function (v) {
-        highScore = Math.max(0, v);
-        localStorage.setItem(HIGH_SCORE_KEY, String(highScore));
+        highScore = Mag.from(v);
+        try {
+          localStorage.setItem(
+            HIGH_SCORE_KEY,
+            JSON.stringify(highScore.toJSON())
+          );
+        } catch (err) {
+          /* ignore */
+        }
       },
     });
     registerAdminField({
@@ -11142,12 +11459,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       id: "nextUpgradeCost",
       group: "ODDS",
       label: "NEXT ODDS COST",
-      type: "number",
+      type: "text",
       get: function () {
-        return nextUpgradeCost;
+        return Mag.from(nextUpgradeCost).toString();
       },
       set: function (v) {
-        nextUpgradeCost = Math.max(1, v);
+        nextUpgradeCost = Mag.from(v);
+        if (nextUpgradeCost.isZero()) nextUpgradeCost = Mag.from(1);
       },
     });
 
@@ -11167,25 +11485,25 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       id: "strengthCoinBonus",
       group: "STRENGTH",
       label: "STRENGTH COIN BONUS",
-      type: "number",
-      step: "any",
+      type: "text",
       get: function () {
-        return strengthCoinBonus;
+        return Mag.from(strengthCoinBonus).toString();
       },
       set: function (v) {
-        strengthCoinBonus = Math.max(0, v);
+        strengthCoinBonus = Mag.from(v);
       },
     });
     registerAdminField({
       id: "nextStrengthCost",
       group: "STRENGTH",
       label: "NEXT STRENGTH COST",
-      type: "number",
+      type: "text",
       get: function () {
-        return nextStrengthCost;
+        return Mag.from(nextStrengthCost).toString();
       },
       set: function (v) {
-        nextStrengthCost = Math.max(1, v);
+        nextStrengthCost = Mag.from(v);
+        if (nextStrengthCost.isZero()) nextStrengthCost = Mag.from(1);
       },
     });
 
@@ -11193,25 +11511,25 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       id: "autoClicksPerSec",
       group: "AUTO",
       label: "AUTO CLICKS / SEC",
-      type: "number",
-      step: "any",
+      type: "text",
       get: function () {
-        return autoClicksPerSec;
+        return Mag.from(autoClicksPerSec).toString();
       },
       set: function (v) {
-        autoClicksPerSec = Math.max(0, v);
+        autoClicksPerSec = Mag.from(v);
       },
     });
     registerAdminField({
       id: "nextAutoCost",
       group: "AUTO",
       label: "NEXT AUTO COST",
-      type: "number",
+      type: "text",
       get: function () {
-        return nextAutoCost;
+        return Mag.from(nextAutoCost).toString();
       },
       set: function (v) {
-        nextAutoCost = Math.max(1, v);
+        nextAutoCost = Mag.from(v);
+        if (nextAutoCost.isZero()) nextAutoCost = Mag.from(1);
       },
     });
 
@@ -11231,12 +11549,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       id: "nextEffectivenessCost",
       group: "EFFECTIVENESS",
       label: "NEXT EFFECTIVENESS COST",
-      type: "number",
+      type: "text",
       get: function () {
-        return nextEffectivenessCost;
+        return Mag.from(nextEffectivenessCost).toString();
       },
       set: function (v) {
-        nextEffectivenessCost = Math.max(1, v);
+        nextEffectivenessCost = Mag.from(v);
+        if (nextEffectivenessCost.isZero()) {
+          nextEffectivenessCost = Mag.from(1);
+        }
       },
     });
 
@@ -11256,25 +11577,25 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       id: "ascendCoinBonus",
       group: "ASCENSION",
       label: "ASCENSION COIN BONUS",
-      type: "number",
-      step: "any",
+      type: "text",
       get: function () {
-        return ascendCoinBonus;
+        return Mag.from(ascendCoinBonus).toString();
       },
       set: function (v) {
-        ascendCoinBonus = Math.max(0, v);
+        ascendCoinBonus = Mag.from(v);
       },
     });
     registerAdminField({
       id: "nextAscendCost",
       group: "ASCENSION",
       label: "NEXT ASCEND COST",
-      type: "number",
+      type: "text",
       get: function () {
-        return nextAscendCost;
+        return Mag.from(nextAscendCost).toString();
       },
       set: function (v) {
-        nextAscendCost = Math.max(1, v);
+        nextAscendCost = Mag.from(v);
+        if (nextAscendCost.isZero()) nextAscendCost = Mag.from(1);
       },
     });
 
@@ -11338,11 +11659,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         row.appendChild(input);
       } else {
         const input = document.createElement("input");
-        input.type = "number";
+        input.type = def.type === "text" ? "text" : "number";
         input.className = "admin-input";
         input.setAttribute("data-admin-field", def.id);
-        if (def.step) input.step = def.step;
-        else input.step = "1";
+        if (def.type !== "text") {
+          if (def.step) input.step = def.step;
+          else input.step = "1";
+        }
         row.appendChild(input);
       }
       adminFieldsEl.appendChild(row);
@@ -11384,7 +11707,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         return;
       }
       if (def.type === "boolean") values[def.id] = !!input.checked;
-      else {
+      else if (def.type === "text") {
+        values[def.id] = String(input.value || "").trim();
+      } else {
         const raw = Number(input.value);
         values[def.id] = Number.isFinite(raw) ? raw : def.get();
       }
@@ -11423,9 +11748,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   function syncAdminAppliedUi() {
     if (coinCountEl) setCoinDisplay(coins);
-    if (pulseCountEl) pulseCountEl.textContent = String(pulses);
-    if (bestCountEl) bestCountEl.textContent = String(highScore);
-    if (highScoreEl) highScoreEl.textContent = String(highScore);
+    if (pulseCountEl) fitNumberEl(pulseCountEl, formatCoins(pulses));
+    if (bestCountEl) bestCountEl.textContent = formatCoins(highScore);
+    if (highScoreEl) highScoreEl.textContent = formatCoins(highScore);
     saveAscend();
     savePermanentUpgrades();
     updatePermaLines();
@@ -11474,17 +11799,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     enforcePermanentFloorOnRun();
     updatePermaLines();
     updateAscendLine();
-    if (highScoreEl) highScoreEl.textContent = String(highScore);
-    if (bestCountEl) bestCountEl.textContent = String(highScore);
+    if (highScoreEl) highScoreEl.textContent = formatCoins(highScore);
+    if (bestCountEl) bestCountEl.textContent = formatCoins(highScore);
     if (coinCountEl) setCoinDisplay(coins);
-    if (pulseCountEl) pulseCountEl.textContent = String(pulses);
+    if (pulseCountEl) fitNumberEl(pulseCountEl, formatCoins(pulses));
 
     if (inGame) {
       clearAdminNextSeed();
       syncAdminAppliedUi();
 
       // 1M+ COINS from admin must fire the cutscene (closes panel so it is visible)
-      if (Number(coins) >= HACKER_COIN_GOAL && !escaping && !ascending) {
+      if (coinsAtLeast(HACKER_COIN_GOAL) && !escaping && !ascending) {
         hideAdminShellOnly();
         setTimeout(function () {
           maybeTriggerHacker({ force: true });
@@ -11494,7 +11819,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       // Power-tier coins → robot vendor (after 1M hacker is resolved / not needed)
       if (
-        Number(coins) >= ROBOT_VENDOR_COIN_GOAL &&
+        coinsAtLeast(ROBOT_VENDOR_COIN_GOAL) &&
         !robotVendorOfferedThisRun &&
         !escaping &&
         !ascending
@@ -11518,17 +11843,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     refreshAdminFields();
     if (!opts.quiet) {
       setAdminMsg(
-        Number(coins) >= HACKER_COIN_GOAL
+        coinsAtLeast(HACKER_COIN_GOAL)
           ? "QUEUED · NEXT FACTORY WILL START THE 1M COIN CUTSCENE"
           : "QUEUED FOR NEXT FACTORY",
         true
       );
     }
     if (enterHint && document.body.classList.contains("is-title")) {
-      enterHint.textContent =
-        Number(coins) >= HACKER_COIN_GOAL
-          ? "ADMIN SEED · NEXT FACTORY OPENS 1M COIN UPLINK"
-          : "ADMIN SEED READY · NEXT NEW FACTORY";
+      enterHint.textContent = coinsAtLeast(HACKER_COIN_GOAL)
+        ? "ADMIN SEED · NEXT FACTORY OPENS 1M COIN UPLINK"
+        : "ADMIN SEED READY · NEXT NEW FACTORY";
     }
     return true;
   }
@@ -11562,15 +11886,23 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if (Number.isFinite(Number(seed.ascendLevel))) {
       ascendLevel = Math.max(0, Number(seed.ascendLevel) | 0);
     }
-    if (Number.isFinite(Number(seed.ascendCoinBonus))) {
-      ascendCoinBonus = Math.max(0, Number(seed.ascendCoinBonus));
+    if (seed.ascendCoinBonus != null && seed.ascendCoinBonus !== "") {
+      ascendCoinBonus = Mag.from(seed.ascendCoinBonus);
     }
-    if (Number.isFinite(Number(seed.nextAscendCost))) {
-      nextAscendCost = Math.max(1, Number(seed.nextAscendCost));
+    if (seed.nextAscendCost != null && seed.nextAscendCost !== "") {
+      nextAscendCost = Mag.from(seed.nextAscendCost);
+      if (nextAscendCost.isZero()) nextAscendCost = Mag.from(BASE_ASCEND_COST);
     }
-    if (Number.isFinite(Number(seed.highScore))) {
-      highScore = Math.max(highScore, Number(seed.highScore) | 0);
-      localStorage.setItem(HIGH_SCORE_KEY, String(highScore));
+    if (seed.highScore != null && seed.highScore !== "") {
+      highScore = Mag.from(highScore).max(seed.highScore);
+      try {
+        localStorage.setItem(
+          HIGH_SCORE_KEY,
+          JSON.stringify(highScore.toJSON())
+        );
+      } catch (err) {
+        /* ignore */
+      }
     }
     savePermanentUpgrades();
     saveAscend();
@@ -11579,8 +11911,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     applyPermanentBaseline();
 
     // 3) Resources / flags
-    if (Number.isFinite(Number(seed.coins))) coins = Math.max(0, Number(seed.coins));
-    if (Number.isFinite(Number(seed.pulses))) pulses = Math.max(0, Number(seed.pulses));
+    if (seed.coins != null && seed.coins !== "") coins = Mag.from(seed.coins);
+    if (seed.pulses != null && seed.pulses !== "") pulses = Mag.from(seed.pulses);
     if (typeof seed.alive === "boolean") alive = seed.alive;
     if (typeof seed.shopOpen === "boolean") shopOpen = seed.shopOpen;
     // New factory should still be allowed to meet the hacker at 1M+
@@ -11590,8 +11922,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     // 4) Admin upgrade cheats only if they exceed the permanent floor
     if (Number.isFinite(Number(seed.effectiveness)) && (Number(seed.effectiveness) | 0) > effectiveness) {
       effectiveness = Number(seed.effectiveness) | 0;
-      if (Number.isFinite(Number(seed.nextEffectivenessCost))) {
-        nextEffectivenessCost = Number(seed.nextEffectivenessCost);
+      if (seed.nextEffectivenessCost != null && seed.nextEffectivenessCost !== "") {
+        nextEffectivenessCost = Mag.from(seed.nextEffectivenessCost);
       }
     }
     if (
@@ -11599,25 +11931,27 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       (Number(seed.buttonStrength) | 0) > buttonStrength
     ) {
       buttonStrength = Number(seed.buttonStrength) | 0;
-      if (Number.isFinite(Number(seed.strengthCoinBonus))) {
-        strengthCoinBonus = Number(seed.strengthCoinBonus);
+      if (seed.strengthCoinBonus != null && seed.strengthCoinBonus !== "") {
+        strengthCoinBonus = Mag.from(seed.strengthCoinBonus);
       }
-      if (Number.isFinite(Number(seed.nextStrengthCost))) {
-        nextStrengthCost = Number(seed.nextStrengthCost);
+      if (seed.nextStrengthCost != null && seed.nextStrengthCost !== "") {
+        nextStrengthCost = Mag.from(seed.nextStrengthCost);
       }
     } else if (
-      Number.isFinite(Number(seed.strengthCoinBonus)) &&
-      Number(seed.strengthCoinBonus) > strengthCoinBonus
+      seed.strengthCoinBonus != null &&
+      seed.strengthCoinBonus !== "" &&
+      Mag.from(seed.strengthCoinBonus).gt(strengthCoinBonus)
     ) {
-      strengthCoinBonus = Number(seed.strengthCoinBonus);
+      strengthCoinBonus = Mag.from(seed.strengthCoinBonus);
     }
     if (
-      Number.isFinite(Number(seed.autoClicksPerSec)) &&
-      Number(seed.autoClicksPerSec) > autoClicksPerSec
+      seed.autoClicksPerSec != null &&
+      seed.autoClicksPerSec !== "" &&
+      Mag.from(seed.autoClicksPerSec).gt(autoClicksPerSec)
     ) {
-      autoClicksPerSec = Number(seed.autoClicksPerSec);
-      if (Number.isFinite(Number(seed.nextAutoCost))) {
-        nextAutoCost = Number(seed.nextAutoCost);
+      autoClicksPerSec = Mag.from(seed.autoClicksPerSec);
+      if (seed.nextAutoCost != null && seed.nextAutoCost !== "") {
+        nextAutoCost = Mag.from(seed.nextAutoCost);
       }
     }
     if (
@@ -11628,8 +11962,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (Number.isFinite(Number(seed.deathChance))) {
         deathChance = clampDeathChance(Number(seed.deathChance));
       }
-      if (Number.isFinite(Number(seed.nextUpgradeCost))) {
-        nextUpgradeCost = Number(seed.nextUpgradeCost);
+      if (seed.nextUpgradeCost != null && seed.nextUpgradeCost !== "") {
+        nextUpgradeCost = Mag.from(seed.nextUpgradeCost);
       }
     } else if (
       Number.isFinite(Number(seed.deathChance)) &&
@@ -12554,8 +12888,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     }
 
     if (teamMode === "control" && teamNoobActors.length) {
+      updateTeamNoobDeathAnims(dt);
       // 2-joint mash — speed scales with auto clicker
-      const autoR = Math.max(0.25, autoClickRate());
+      let autoR = Mag.from(autoClickRate()).toNumber();
+      if (!Number.isFinite(autoR) || autoR < 0.25) autoR = 0.25;
       const mashHz = Math.min(16, 1.25 + Math.log10(1 + autoR) * 3.0);
       teamNoobActors.forEach(function (child, i) {
         const parts = child.userData.parts;
@@ -12563,7 +12899,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const noobData = teamNoobs.find(function (n) {
           return n && n.id === child.userData.noobId;
         });
-        // Fallen recruits stay down — no mash
+        // Dead / dying recruits do not mash
+        if (child.userData.deathAnim) return;
         if (noobData && noobData.alive === false) return;
 
         const phase = (t * mashHz + i * 0.41) % 1;
