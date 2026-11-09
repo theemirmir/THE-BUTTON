@@ -4675,10 +4675,36 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     this.e = Number(e) || 0;
     this._norm();
   }
-  Mag.ZERO = new Mag(0, 0);
+  Mag.prototype._norm = function () {
+    if (!Number.isFinite(this.m) || this.m === 0) {
+      this.m = 0;
+      this.e = 0;
+      return this;
+    }
+    if (!Number.isFinite(this.e)) {
+      this.m = 1;
+      this.e = GOOGOLPLEX_EXP;
+      return this;
+    }
+    const logAdj = Math.floor(Math.log10(Math.abs(this.m)));
+    if (Number.isFinite(logAdj) && logAdj !== 0) {
+      this.m /= Math.pow(10, logAdj);
+      this.e += logAdj;
+    }
+    if (this.e >= GOOGOLPLEX_EXP) {
+      this.m = Math.min(Math.max(this.m, 1), 9.999);
+      this.e = GOOGOLPLEX_EXP;
+    }
+    if (this.e < -324) {
+      this.m = 0;
+      this.e = 0;
+    }
+    return this;
+  };
   Mag.zero = function () {
     return new Mag(0, 0);
   };
+  Mag.ZERO = Mag.zero();
   Mag.from = function (v) {
     if (v instanceof Mag) return new Mag(v.m, v.e);
     if (v && typeof v === "object" && v.m != null && v.e != null) {
@@ -4707,32 +4733,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     const e = Math.floor(Math.log10(abs));
     const m = abs / Math.pow(10, e);
     return new Mag(m, e);
-  };
-  Mag.prototype._norm = function () {
-    if (!Number.isFinite(this.m) || this.m === 0) {
-      this.m = 0;
-      this.e = 0;
-      return this;
-    }
-    if (!Number.isFinite(this.e)) {
-      this.m = 1;
-      this.e = GOOGOLPLEX_EXP;
-      return this;
-    }
-    const logAdj = Math.floor(Math.log10(Math.abs(this.m)));
-    if (Number.isFinite(logAdj) && logAdj !== 0) {
-      this.m /= Math.pow(10, logAdj);
-      this.e += logAdj;
-    }
-    if (this.e >= GOOGOLPLEX_EXP) {
-      this.m = Math.min(Math.max(this.m, 1), 9.999);
-      this.e = GOOGOLPLEX_EXP;
-    }
-    if (this.e < -324) {
-      this.m = 0;
-      this.e = 0;
-    }
-    return this;
   };
   Mag.prototype.clone = function () {
     return new Mag(this.m, this.e);
@@ -5208,7 +5208,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   } catch (err) {
     cutsceneSkippers = 0;
   }
-
   function saveRobotShopUnlock() {
     try {
       localStorage.setItem(
@@ -7956,18 +7955,29 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     }, 2400);
   }
 
-  highScoreEl.textContent = formatCoins(highScore);
-  bestCountEl.textContent = formatCoins(highScore);
-  updateFairLine();
-  updateAscendLine();
-  updatePlayerLine();
-  updateOddsUI();
-  syncVersionShopBoard();
+  // Name gate first so a later UI glitch cannot leave players stuck
   if (hasPlayerName()) {
-    updateLeaderboardScore();
-    if (enterHint) enterHint.textContent = "SAVED RUNS APPEAR UNDER SERVERS";
+    if (enterHint) {
+      enterHint.textContent = isAdminOperator()
+        ? "TAB OR ` · ADMIN PANEL"
+        : "SAVED RUNS APPEAR UNDER SERVERS";
+    }
   } else {
     openNameGate(true);
+    if (enterHint) enterHint.textContent = "A NAME IS REQUIRED TO PLAY";
+  }
+
+  try {
+    if (highScoreEl) highScoreEl.textContent = formatCoins(highScore);
+    if (bestCountEl) bestCountEl.textContent = formatCoins(highScore);
+    updateFairLine();
+    updateAscendLine();
+    updatePlayerLine();
+    updateOddsUI();
+    syncVersionShopBoard();
+    if (hasPlayerName()) updateLeaderboardScore();
+  } catch (bootUiErr) {
+    console.error("THE BUTTON boot UI error", bootUiErr);
   }
 
   const scene = new THREE.Scene();
