@@ -1219,10 +1219,11 @@ body.is-hooked #shop-panel {
 .name-gate {
   position: absolute;
   inset: 0;
-  z-index: 60;
+  z-index: 200;
   display: grid;
   place-items: center;
   padding: 1rem;
+  pointer-events: auto;
   background:
     radial-gradient(circle at center, rgba(16, 36, 26, 0.55), rgba(0, 0, 0, 0.92));
 }
@@ -3641,6 +3642,7 @@ body.is-admin .admin-panel:not([hidden]) {
 
         <p class="enter-hint" id="enter-hint">A NAME IS REQUIRED TO PLAY</p>
         <p class="audio-hint">AUDIO UNLOCKS ON ENTER</p>
+        <p class="audio-hint" id="build-id-line" hidden></p>
       </div>
 
       <div class="backpack-panel" id="backpack-panel" hidden>
@@ -4636,9 +4638,32 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 (function () {
   "use strict";
 
+  const BUILD_ID = "2026-11-09-mag-bootfix";
+  window.__BUTTON_BUILD = BUILD_ID;
+
+  function showBootFail(msg) {
+    try {
+      const hint = document.getElementById("enter-hint");
+      if (hint) {
+        hint.textContent = String(msg || "BOOT FAILED · HARD REFRESH (CTRL+F5)");
+        hint.style.color = "#ff6b6b";
+      }
+      const gate = document.getElementById("name-gate");
+      if (gate) gate.hidden = false;
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  window.addEventListener("error", function (ev) {
+    if (window.__BUTTON_BOOTED) return;
+    showBootFail(
+      "SCRIPT ERROR · " + (ev && ev.message ? ev.message : "UNKNOWN")
+    );
+  });
+
   if (typeof THREE === "undefined") {
-    const hint = document.getElementById("enter-hint");
-    if (hint) hint.textContent = "FAILED TO LOAD 3D ENGINE";
+    showBootFail("FAILED TO LOAD 3D ENGINE");
     return;
   }
 
@@ -4706,33 +4731,37 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   };
   Mag.ZERO = Mag.zero();
   Mag.from = function (v) {
-    if (v instanceof Mag) return new Mag(v.m, v.e);
-    if (v && typeof v === "object" && v.m != null && v.e != null) {
-      return new Mag(v.m, v.e);
-    }
-    if (typeof v === "string") {
-      const s = String(v).trim();
-      if (!s) return Mag.zero();
-      try {
-        if (s.charAt(0) === "{" || s.charAt(0) === "[") {
-          return Mag.from(JSON.parse(s));
-        }
-      } catch (err) {
-        /* fall through */
+    try {
+      if (v instanceof Mag) return new Mag(v.m, v.e);
+      if (v && typeof v === "object" && v.m != null && v.e != null) {
+        return new Mag(v.m, v.e);
       }
-      const sci = /^([0-9]*\.?[0-9]+)e([+-]?[0-9]+)$/i.exec(s);
-      if (sci) return new Mag(Number(sci[1]), Number(sci[2]));
-      v = Number(s);
-    }
-    const n = Number(v);
-    if (!Number.isFinite(n) || n === 0) {
-      if (n === Infinity) return new Mag(1, GOOGOLPLEX_EXP);
+      if (typeof v === "string") {
+        const s = String(v).trim();
+        if (!s || s === "[object Object]") return Mag.zero();
+        try {
+          if (s.charAt(0) === "{" || s.charAt(0) === "[") {
+            return Mag.from(JSON.parse(s));
+          }
+        } catch (err) {
+          /* fall through */
+        }
+        const sci = /^([0-9]*\.?[0-9]+)e([+-]?[0-9]+)$/i.exec(s);
+        if (sci) return new Mag(Number(sci[1]), Number(sci[2]));
+        v = Number(s);
+      }
+      const n = Number(v);
+      if (!Number.isFinite(n) || n === 0) {
+        if (n === Infinity) return new Mag(1, GOOGOLPLEX_EXP);
+        return Mag.zero();
+      }
+      const abs = Math.abs(n);
+      const e = Math.floor(Math.log10(abs));
+      const m = abs / Math.pow(10, e);
+      return new Mag(m, e);
+    } catch (err) {
       return Mag.zero();
     }
-    const abs = Math.abs(n);
-    const e = Math.floor(Math.log10(abs));
-    const m = abs / Math.pow(10, e);
-    return new Mag(m, e);
   };
   Mag.prototype.clone = function () {
     return new Mag(this.m, this.e);
@@ -13145,6 +13174,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       event.stopPropagation();
       continueSavedFactory();
     });
+  }
+
+  window.__BUTTON_BOOTED = true;
+  try {
+    const buildLine = document.getElementById("build-id-line");
+    if (buildLine) {
+      buildLine.hidden = false;
+      buildLine.textContent = "BUILD · " + BUILD_ID;
+    }
+  } catch (errBuild) {
+    /* ignore */
   }
 })();
 </script>
