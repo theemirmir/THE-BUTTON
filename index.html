@@ -3689,18 +3689,26 @@ body.is-admin .admin-panel:not([hidden]) {
 
     <div class="name-gate" id="name-gate" hidden>
       <div class="name-gate-inner">
-        <p class="name-gate-kicker">YOUR ACCOUNT ON THIS BROWSER</p>
+        <p class="name-gate-kicker">STEP 1 · REQUIRED</p>
         <h2 class="name-gate-title">OPERATOR NAME</h2>
-        <p class="name-gate-sub">Renaming keeps the same account. A second player needs another browser or device.</p>
+        <p class="name-gate-sub">
+          Type any name, then press CONFIRM. Until you confirm, other buttons stay locked.
+          Progress is saved in this browser only.
+        </p>
         <input
           type="text"
           id="name-input"
           class="name-input"
           maxlength="16"
-          placeholder="OPERATOR NAME"
+          placeholder="TYPE NAME HERE"
           autocomplete="username"
         />
-        <button type="button" class="title-action-btn" id="name-confirm-btn">CONFIRM</button>
+        <button type="button" class="title-action-btn" id="name-confirm-btn">
+          CONFIRM · UNLOCK PLAY
+        </button>
+        <button type="button" class="title-action-btn title-action-btn--ghost" id="name-guest-btn">
+          PLAY AS GUEST
+        </button>
         <p class="name-gate-error" id="name-gate-error"></p>
       </div>
     </div>
@@ -4638,7 +4646,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 (function () {
   "use strict";
 
-  const BUILD_ID = "2026-11-09-mag-bootfix";
+  const BUILD_ID = "2026-11-09-name-unlock";
   window.__BUTTON_BUILD = BUILD_ID;
 
   function showBootFail(msg) {
@@ -5076,6 +5084,25 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   let coins = Mag.zero();
   let pulses = Mag.zero();
   let highScore = Mag.from(localStorage.getItem(HIGH_SCORE_KEY) || 0);
+  // Recover best pulse from saved servers if the high-score key was wiped
+  try {
+    const serverList = JSON.parse(localStorage.getItem(SERVERS_KEY) || "[]");
+    if (Array.isArray(serverList)) {
+      serverList.forEach(function (s) {
+        if (!s || !s.run) return;
+        const p = Mag.from(s.run.pulses);
+        if (p.gt(highScore)) highScore = p;
+      });
+      if (!highScore.isZero()) {
+        localStorage.setItem(
+          HIGH_SCORE_KEY,
+          JSON.stringify(highScore.toJSON())
+        );
+      }
+    }
+  } catch (errRecoverHs) {
+    /* ignore */
+  }
   let alive = true;
   let pressing = false;
   let resolving = false;
@@ -5102,7 +5129,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   let rollBag = [];
   let ascending = false;
   let currentServerId = null;
-  let playerName = (localStorage.getItem(PLAYER_NAME_KEY) || "").trim();
+  let playerName = "";
+  try {
+    playerName = (
+      localStorage.getItem(PLAYER_NAME_KEY) ||
+      sessionStorage.getItem(PLAYER_NAME_KEY) ||
+      ""
+    ).trim();
+    if (playerName && !localStorage.getItem(PLAYER_NAME_KEY)) {
+      localStorage.setItem(PLAYER_NAME_KEY, playerName);
+    }
+  } catch (errNameLoad) {
+    playerName = "";
+  }
 
   let ascendLevel = 0;
   let ascendCoinBonus = Mag.zero();
@@ -6799,28 +6838,58 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if (nameGate) nameGate.hidden = true;
   }
 
-  function confirmPlayerName() {
-    const next = normalizeName(nameInput ? nameInput.value : "");
+  function persistPlayerName(name) {
+    playerName = normalizeName(name);
+    try {
+      localStorage.setItem(PLAYER_NAME_KEY, playerName);
+      sessionStorage.setItem(PLAYER_NAME_KEY, playerName);
+    } catch (err) {
+      /* private mode */
+    }
+  }
+
+  function confirmPlayerName(opts) {
+    opts = opts || {};
+    let next = normalizeName(nameInput ? nameInput.value : "");
+    if (opts.guest) {
+      next = next || "GUEST";
+    }
     if (!next) {
-      if (nameGateError) nameGateError.textContent = "NAME REQUIRED";
+      if (nameGateError) {
+        nameGateError.textContent = "TYPE A NAME, THEN PRESS CONFIRM";
+      }
+      if (nameInput) nameInput.focus();
       return false;
     }
-    if (!/^[a-zA-Z0-9 _.\-]+$/.test(next)) {
+    // Allow most printable characters so Chinese / symbols still work
+    if (/[\u0000-\u001F\u007F]/.test(next)) {
       if (nameGateError) {
-        nameGateError.textContent = "USE LETTERS, NUMBERS, SPACES ONLY";
+        nameGateError.textContent = "NAME HAS INVALID CHARACTERS";
       }
       return false;
     }
-    playerName = next;
-    localStorage.setItem(PLAYER_NAME_KEY, playerName);
+    persistPlayerName(next);
     unlockAdminDeviceIfAllowed();
     updatePlayerLine();
-    updateLeaderboardScore();
+    try {
+      updateLeaderboardScore();
+    } catch (errLb) {
+      /* offline board ok */
+    }
     closeNameGate();
     if (enterHint) {
       enterHint.textContent = isAdminOperator()
         ? "TAB OR ` · ADMIN PANEL"
-        : "SAVED RUNS APPEAR UNDER SERVERS";
+        : "READY · PRESS NEW FACTORY";
+    }
+    if (opts.autoEnter) {
+      setTimeout(function () {
+        try {
+          enterGame();
+        } catch (errEnter) {
+          /* ignore */
+        }
+      }, 30);
     }
     return true;
   }
@@ -6828,7 +6897,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   function ensureNamedOrGate() {
     if (hasPlayerName()) return true;
     openNameGate(true);
-    if (nameGateError) nameGateError.textContent = "ENTER A NAME TO PLAY";
+    if (nameGateError) {
+      nameGateError.textContent =
+        "BUTTONS LOCKED · TYPE A NAME AND PRESS CONFIRM";
+    }
+    if (enterHint) {
+      enterHint.textContent = "CONFIRM A NAME TO UNLOCK BUTTONS";
+    }
     return false;
   }
 
@@ -12417,7 +12492,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   if (nameConfirmBtn) {
     nameConfirmBtn.addEventListener("click", function (event) {
       event.stopPropagation();
-      confirmPlayerName();
+      event.preventDefault();
+      confirmPlayerName({ autoEnter: false });
+    });
+  }
+
+  const nameGuestBtn = document.getElementById("name-guest-btn");
+  if (nameGuestBtn) {
+    nameGuestBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      event.preventDefault();
+      if (nameInput && !String(nameInput.value || "").trim()) {
+        nameInput.value = "GUEST";
+      }
+      confirmPlayerName({ guest: true, autoEnter: true });
     });
   }
 
